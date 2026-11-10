@@ -1,0 +1,7 @@
+# HP Prime calculators — let the logged-in user open the HID device from Chrome (WebHID).
+# Install:  sudo cp udev/60-hp-prime.rules /etc/udev/rules.d/
+#           sudo udevadm control --reload && sudo udevadm trigger
+# Then unplug/replug the calculator.
+KERNEL=="hidraw*", ATTRS{idVendor}=="03f0", ATTRS{idProduct}=="0441", MODE="0660", TAG+="uaccess"
+KERNEL=="hidraw*", ATTRS{idVendor}=="03f0", ATTRS{idProduct}=="1541", MODE="0660", TAG+="uaccess"
+KERNEL=="hidraw*", ATTRS{idVendor}=="03f0", ATTRS{idProduct}=="2441", MODE="0660", TAG+="uaccess"
