@@ -12,6 +12,7 @@ The goal is a browser IDE for writing HP Prime PPL ("HP Basic") programs and sen
 - **Next:** hardware verification → screenshot view → `.hpprgm` import/export → experimental run (M5) → language features (M3 rest).
 
 ## Conventions
+- Repo: https://github.com/APie357/hp-prime-web (public). Every push to `main` runs `.github/workflows/pages.yml` (test → build → deploy) to https://apie357.github.io/hp-prime-web/. Vite's `base` is `/hp-prime-web/` in production builds.
 - Protocol code in `src/lib/hid/` stays framework-free and unit-tested. The UI talks to it only through `src/lib/state.svelte.ts`.
 - `PrimeSession` serializes all operations. Never touch the port outside it.
 - Program uploads are raw UTF-16LE text with no BOM, `\n` line endings, and no `.hpprgm` container.
