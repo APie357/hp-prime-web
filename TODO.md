@@ -39,7 +39,7 @@ The user confirmed on 2026-11-09 that connect, send, receive, list, and fetch wo
 - [x] Hover docs and signature help (`src/lib/lang/providers.ts`; not yet checked in a browser)
 - [x] Snippets: `EXPORT` procedure, `IF/THEN/ELSE/END`, `FOR`, `WHILE`, `REPEAT`, `CASE`
 - [x] Outline, go-to-definition, folding for `BEGIN…END` and other blocks (`src/lib/lang/symbols.ts`; not yet tried in a browser)
-- [ ] Lint: unbalanced blocks, missing `;`, `=` vs `:=` at statement level
+- [x] Lint (`src/lib/lang/diagnostics.ts`; not yet tried in a browser): unbalanced blocks and brackets, unterminated strings, missing `;`, `=` vs `:=`, built-in argument counts, assignment to undeclared variables, lower-case commands, duplicate declarations
 - [ ] Optional: shortcut for typing `▶` (declined for now)
 - [ ] Optional: formatter
 
