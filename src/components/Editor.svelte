@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { monaco, PPL } from '../lib/monaco';
+  import { kindFromFile } from '../lib/files/workspace';
   import { app, editorBridge, markDirty, readFile, saveFile, sendCurrent } from '../lib/state.svelte';
 
   let host: HTMLDivElement;
@@ -12,7 +13,8 @@
   function modelFor(file: string, text: string): monaco.editor.ITextModel {
     let m = models.get(file);
     if (m) return m;
-    m = monaco.editor.createModel(text, PPL, monaco.Uri.file('/' + file));
+    const language = kindFromFile(file) === 'note' ? 'plaintext' : PPL;
+    m = monaco.editor.createModel(text, language, monaco.Uri.file('/' + file));
     m.onDidChangeContent(() => {
       if (loading) return;
       markDirty(file);
@@ -66,6 +68,8 @@
       editor.setModel(null);
       return;
     }
+    // Notes are prose: wrap long lines.
+    editor.updateOptions({ wordWrap: kindFromFile(file) === 'note' ? 'on' : 'off' });
     const existing = models.get(file);
     if (existing) {
       editor.setModel(existing);
@@ -84,7 +88,7 @@
   {#if !app.current}
     <div class="empty">
       <p>No file open.</p>
-      <p class="hint">Create a program on the left, or pull one from the calculator.</p>
+      <p class="hint">Create a program or note on the left, or pull one from the calculator.</p>
       <p class="hint"><kbd>Ctrl</kbd>+<kbd>S</kbd> save · <kbd>Ctrl</kbd>+<kbd>Enter</kbd> send to calculator</p>
     </div>
   {/if}

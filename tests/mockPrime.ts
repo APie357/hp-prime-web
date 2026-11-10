@@ -10,11 +10,21 @@ import { parseFileMessage } from '../src/lib/hid/parsers';
 import { ReportQueue, type ReportPort } from '../src/lib/hid/port';
 
 export class MockPrime implements ReportPort {
+  setProgram(name: string, src: string) {
+    this.objects.set(`${C.ObjType.PROGRAM}:${name}`, utf16le(src));
+  }
+  program(name: string): string | undefined {
+    const d = this.objects.get(`${C.ObjType.PROGRAM}:${name}`);
+    return d && fromUtf16le(d);
+  }
+
   readonly framing: LegacyFraming;
   private q = new ReportQueue();
   private inbound;
-  programs = new Map<string, string>();
+  /** Raw stored object bodies keyed by `${type}:${name}`. */
+  objects = new Map<string, Uint8Array>();
   sentKeys: number[][] = [];
+  clockSets: number[][] = [];
   refuseWrites = false;
 
   constructor(readonly reportSize = 1024) {
@@ -52,20 +62,27 @@ export class MockPrime implements ReportPort {
       case C.CMD.FILE: {
         if (this.refuseWrites) return this.reply(Uint8Array.of(0xf9, 0x01, 0, 0, 0, 0));
         const f = parseFileMessage(msg);
-        this.programs.set(f.name, fromUtf16le(f.data));
+        this.objects.set(`${f.type}:${f.name}`, f.data);
         return; // silent, like current firmware
       }
       case C.CMD.REQ_FILE: {
+        const type = msg[6];
         const nameLen = msg[7];
         const name = fromUtf16le(msg.subarray(10, 10 + nameLen));
-        const src = this.programs.get(name);
-        if (src === undefined) return; // silent
-        return this.reply(C.sendFile(C.ObjType.PROGRAM, name, concat(utf16le(src), [0, 0])));
+        const data = this.objects.get(`${type}:${name}`);
+        if (data === undefined) return; // silent
+        return this.reply(C.sendFile(type, name, concat(data, [0, 0])));
       }
       case C.CMD.BACKUP: {
-        for (const [name, src] of this.programs) this.reply(C.sendFile(C.ObjType.PROGRAM, name, utf16le(src)));
+        for (const [key, data] of this.objects) {
+          const i = key.indexOf(':');
+          this.reply(C.sendFile(Number(key.slice(0, i)), key.slice(i + 1), data));
+        }
         return this.reply(Uint8Array.of(0xf9, 0x01, 0, 0, 0, 0));
       }
+      case C.CMD.SET_TIME:
+        this.clockSets.push(Array.from(msg.subarray(6)));
+        return; // silent
       case C.CMD.KEY:
         this.sentKeys.push(Array.from(msg.subarray(6)));
         return;

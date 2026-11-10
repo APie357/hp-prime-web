@@ -1,23 +1,26 @@
 /** Application state and actions shared by the components. */
 import { log } from './hid/log';
-import { PrimeSession } from './hid/session';
+import { decodeText, isValidName, PrimeSession, type TextKind } from './hid/session';
 import { grantedPrimes, requestPrime, WebHidPort, webHidSupported } from './hid/transport';
 import type { DeviceInfo } from './hid/parsers';
 import { ObjType } from './hid/commands';
-import { fromUtf16le } from './hid/bytes';
 import {
+  fileFor,
+  kindFromFile,
   pickFolder,
   programNameFromFile,
   regrant,
   restoreWorkspace,
-  SOURCE_EXT,
   useBrowserWorkspace,
   type Workspace,
 } from './files/workspace';
 
-export interface CalcProgram {
+/** A program or note seen on the calculator. */
+export interface CalcObject {
+  kind: TextKind;
   name: string;
-  source: string;
+  text: string;
+  formatted: boolean;
 }
 
 export const app = $state({
@@ -34,7 +37,7 @@ export const app = $state({
   files: [] as string[],
   current: null as string | null,
   dirty: [] as string[],
-  calcPrograms: [] as CalcProgram[],
+  calcObjects: [] as CalcObject[],
   calcListedAt: 0,
   padReports: false,
   verifyAfterSend: true,
@@ -154,89 +157,117 @@ function needSession(): PrimeSession {
   return session;
 }
 
-/** Send the open file to the calculator as a program. */
+/** Send the open file to the calculator as a program or note. */
 export async function sendCurrent(): Promise<void> {
   const file = app.current;
   if (!file) return setStatus('Open a file first', 'error');
   const text = editorBridge.getText(file);
   if (text === null) return;
   await saveCurrent();
+  const kind = kindFromFile(file);
   const name = programNameFromFile(file);
+  if (!isValidName(kind, name)) {
+    return setStatus(
+      kind === 'program'
+        ? `"${name}" is not a valid program name (letters, digits, _; must not start with a digit)`
+        : `"${name}" is not a valid note name`,
+      'error',
+    );
+  }
   await busy(`Sending ${name}`, async () => {
     const s = needSession();
-    setStatus(`Checking whether ${name} exists on the calculator…`);
-    const existing = await s.requestFile(ObjType.PROGRAM, name, 1500);
-    if (existing && !confirm(`"${name}" already exists on the calculator. Overwrite it?`)) {
-      setStatus('Send cancelled');
-      return;
+    setStatus(`Checking whether ${kind} ${name} exists on the calculator…`);
+    const existing = await s.readText(kind, name, 1500);
+    if (existing) {
+      const extra = existing.formatted ? '\n\nIts rich-text formatting will be replaced by plain text.' : '';
+      if (!confirm(`${kind === 'note' ? 'Note' : 'Program'} "${name}" already exists on the calculator. Overwrite it?${extra}`)) {
+        setStatus('Send cancelled');
+        return;
+      }
     }
     setStatus(`Sending ${name}…`);
-    const r = await s.sendProgram(name, text, app.verifyAfterSend);
+    const r = await s.sendText(kind, name, text, app.verifyAfterSend);
     if (r.refused) return setStatus(`Calculator refused ${name}`, 'error');
-    upsertCalc(name, r.readback ?? text);
+    upsertCalc({ kind, name, text: r.readback ?? text, formatted: false });
     switch (r.verified) {
       case 'match':
-        return setStatus(`Sent ${name} (${r.bytes} B) — read-back verified ✓`, 'ok');
+        return setStatus(`Sent ${kind} ${name} (${r.bytes} B) — read-back verified ✓`, 'ok');
       case 'mismatch':
         log('warn', `read-back differs:\n${r.readback}`);
         return setStatus(`Sent ${name}, but the read-back differs (see console)`, 'error');
       case 'no-reply':
         return setStatus(`Sent ${name} (${r.bytes} B); read-back got no reply`, 'error');
       default:
-        return setStatus(`Sent ${name} (${r.bytes} B)`, 'ok');
+        return setStatus(`Sent ${kind} ${name} (${r.bytes} B)`, 'ok');
     }
   });
 }
 
-function upsertCalc(name: string, source: string) {
-  const i = app.calcPrograms.findIndex((p) => p.name === name);
-  if (i >= 0) app.calcPrograms[i] = { name, source };
-  else app.calcPrograms = [...app.calcPrograms, { name, source }].sort((a, b) => a.name.localeCompare(b.name));
+function upsertCalc(obj: CalcObject) {
+  const i = app.calcObjects.findIndex((p) => p.kind === obj.kind && p.name === obj.name);
+  if (i >= 0) app.calcObjects[i] = obj;
+  else app.calcObjects = [...app.calcObjects, obj].sort((a, b) => a.name.localeCompare(b.name));
 }
 
-/** List programs on the calculator (full backup stream, takes a while). */
-export async function refreshCalcPrograms(): Promise<void> {
+/** List programs and notes on the calculator (full backup stream, takes a while). */
+export async function refreshCalcContents(): Promise<void> {
   await busy('Reading calculator', async () => {
     const s = needSession();
     setStatus('Reading calculator contents (this can take ~20 s)…');
     const files = await s.backup((p) => {
       app.busy = `Reading calculator (${p.count} objects)`;
     });
-    const progs = new Map<string, string>();
-    for (const f of files) if (f.type === ObjType.PROGRAM) progs.set(f.name, fromUtf16le(f.data));
-    app.calcPrograms = [...progs].map(([name, source]) => ({ name, source })).sort((a, b) => a.name.localeCompare(b.name));
+    const objs = new Map<string, CalcObject>();
+    for (const f of files) {
+      const kind: TextKind | null = f.type === ObjType.PROGRAM ? 'program' : f.type === ObjType.NOTE ? 'note' : null;
+      if (!kind) continue;
+      objs.set(`${kind}:${f.name}`, { kind, name: f.name, ...decodeText(kind, f.data) });
+    }
+    app.calcObjects = [...objs.values()].sort((a, b) => a.name.localeCompare(b.name));
     app.calcListedAt = Date.now();
-    setStatus(`Found ${app.calcPrograms.length} program(s) in ${files.length} objects`, 'ok');
+    const n = (k: TextKind) => app.calcObjects.filter((o) => o.kind === k).length;
+    setStatus(`Found ${n('program')} program(s) and ${n('note')} note(s) in ${files.length} objects`, 'ok');
   });
 }
 
-/** Fetch one program by name (fast; no backup needed). */
-export async function fetchProgram(name: string): Promise<void> {
+/** Fetch one program or note by name (fast; no backup needed). */
+export async function fetchObject(kind: TextKind, name: string): Promise<void> {
   name = name.trim();
   if (!name) return;
   await busy(`Fetching ${name}`, async () => {
-    const src = await needSession().readProgram(name);
-    if (src === null) return setStatus(`No reply for "${name}" (names are case-sensitive)`, 'error');
-    upsertCalc(name, src);
-    setStatus(`Fetched ${name}`, 'ok');
-    await importProgram(name, src);
+    const obj = await needSession().readText(kind, name);
+    if (!obj) return setStatus(`No ${kind} named "${name}" answered (names are case-sensitive)`, 'error');
+    upsertCalc(obj);
+    setStatus(`Fetched ${kind} ${name}${obj.formatted ? ' (rich formatting not shown; editing keeps plain text only)' : ''}`, 'ok');
+    await importObject(obj.kind, obj.name, obj.text);
   });
 }
 
-/** Put a calculator program into the workspace and open it. */
-export async function importProgram(name: string, source: string): Promise<void> {
+/** Put a calculator program or note into the workspace and open it. */
+export async function importObject(kind: TextKind, name: string, text: string): Promise<void> {
   const ws = await ensureWorkspace();
-  const file = name + SOURCE_EXT;
+  const file = fileFor(kind, name);
   if (await ws.exists(file)) {
     const local = app.current === file ? editorBridge.getText(file) : await ws.read(file);
-    if (local !== null && local.replace(/\r\n?/g, '\n') !== source.replace(/\r\n?/g, '\n')) {
+    if (local !== null && local.replace(/\r\n?/g, '\n') !== text.replace(/\r\n?/g, '\n')) {
       if (!confirm(`${file} already exists locally and differs. Replace it with the calculator's version?`)) return;
     }
   }
-  await ws.write(file, source);
-  editorBridge.setText(file, source);
+  await ws.write(file, text);
+  editorBridge.setText(file, text);
   await refreshFiles();
   app.current = file;
+}
+
+/** Set the calculator's clock to this computer's local time. */
+export async function syncClock(): Promise<void> {
+  await busy('Setting clock', async () => {
+    const now = new Date();
+    const ok = await needSession().setDateTime(now);
+    const when = now.toLocaleString([], { dateStyle: 'medium', timeStyle: 'medium' });
+    if (ok) setStatus(`Clock set to ${when} — check it on the calculator`, 'ok');
+    else setStatus(`Clock sent (${when}), but the calculator didn't answer the follow-up ready check`, 'error');
+  });
 }
 
 // ---------------------------------------------------------- workspace
@@ -297,14 +328,18 @@ export async function readFile(file: string): Promise<string> {
   return (await ensureWorkspace()).read(file);
 }
 
-export async function newFile(): Promise<void> {
-  const name = prompt('Program name (letters, digits, _):', 'NEWPROG');
+export async function newFile(kind: TextKind = 'program'): Promise<void> {
+  const name = prompt(
+    kind === 'program' ? 'Program name (letters, digits, _):' : 'Note name:',
+    kind === 'program' ? 'NEWPROG' : 'New note',
+  );
   if (!name) return;
-  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) return setStatus(`"${name}" is not a valid program name`, 'error');
+  if (!isValidName(kind, name)) return setStatus(`"${name}" is not a valid ${kind} name`, 'error');
   const ws = await ensureWorkspace();
-  const file = name + SOURCE_EXT;
+  const file = fileFor(kind, name);
   if (await ws.exists(file)) return setStatus(`${file} already exists`, 'error');
-  const template = `EXPORT ${name}()\nBEGIN\n  PRINT();\n  PRINT("Hello from ${name}");\nEND;\n`;
+  const template =
+    kind === 'program' ? `EXPORT ${name}()\nBEGIN\n  PRINT();\n  PRINT("Hello from ${name}");\nEND;\n` : '';
   await ws.write(file, template);
   await refreshFiles();
   app.current = file;

@@ -1,7 +1,12 @@
 <script lang="ts">
-  import { app, fetchProgram, importProgram, refreshCalcPrograms } from '../lib/state.svelte';
+  import type { TextKind } from '../lib/hid/session';
+  import { app, fetchObject, importObject, refreshCalcContents, syncClock } from '../lib/state.svelte';
 
   let fetchName = $state('');
+  let fetchKind = $state<TextKind>('program');
+
+  const programs = $derived(app.calcObjects.filter((o) => o.kind === 'program'));
+  const notes = $derived(app.calcObjects.filter((o) => o.kind === 'note'));
 </script>
 
 <section class="panel">
@@ -20,31 +25,45 @@
     </dl>
 
     <div class="pad row">
-      <button onclick={refreshCalcPrograms} disabled={!!app.busy}>List programs</button>
+      <button onclick={refreshCalcContents} disabled={!!app.busy} title="Read all programs and notes (full backup, ~20 s)">
+        List contents
+      </button>
+      <button onclick={syncClock} disabled={!!app.busy} title="Set the calculator's date and time to this computer's">
+        Sync clock
+      </button>
     </div>
     <form
       class="pad row"
       onsubmit={(e) => {
         e.preventDefault();
-        fetchProgram(fetchName);
+        fetchObject(fetchKind, fetchName);
       }}
     >
-      <input placeholder="Program name" bind:value={fetchName} spellcheck="false" />
+      <select bind:value={fetchKind} aria-label="Object type">
+        <option value="program">Program</option>
+        <option value="note">Note</option>
+      </select>
+      <input placeholder="Name" bind:value={fetchName} spellcheck="false" />
       <button type="submit" disabled={!!app.busy || !fetchName.trim()}>Fetch</button>
     </form>
 
-    <h3 class="pad">Programs {#if app.calcListedAt}<span class="muted">({app.calcPrograms.length})</span>{/if}</h3>
-    <ul>
-      {#each app.calcPrograms as p (p.name)}
-        <li>
-          <span class="name">{p.name}</span>
-          <span class="muted size">{p.source.length} ch</span>
-          <button onclick={() => importProgram(p.name, p.source)} title="Copy into workspace and open">Open</button>
-        </li>
-      {:else}
-        <li class="muted">{app.calcListedAt ? 'No programs on the calculator' : 'Click “List programs” to read them'}</li>
+    <div class="lists">
+      {#each [{ title: 'Programs', items: programs, kind: 'program' }, { title: 'Notes', items: notes, kind: 'note' }] as group (group.kind)}
+        <h3 class="pad">{group.title} {#if app.calcListedAt}<span class="muted">({group.items.length})</span>{/if}</h3>
+        <ul>
+          {#each group.items as o (o.name)}
+            <li>
+              <span class="name" title={o.name}>{o.name}</span>
+              {#if o.formatted}<span class="muted tag" title="Has rich-text formatting; only the plain text is edited">rich</span>{/if}
+              <span class="muted size">{o.text.length} ch</span>
+              <button onclick={() => importObject(o.kind, o.name, o.text)} title="Copy into workspace and open">Open</button>
+            </li>
+          {:else}
+            <li class="muted">{app.calcListedAt ? `No ${group.title.toLowerCase()}` : 'Click “List contents” to read them'}</li>
+          {/each}
+        </ul>
       {/each}
-    </ul>
+    </div>
   {/if}
 </section>
 
@@ -61,6 +80,14 @@
     flex: 1;
     min-width: 0;
   }
+  select {
+    font: inherit;
+    font-size: 13px;
+    color: var(--fg);
+    background: #3c3c3c;
+    border: 1px solid #4a4d52;
+    border-radius: 4px;
+  }
   dl {
     display: grid;
     grid-template-columns: auto 1fr;
@@ -74,6 +101,11 @@
     margin: 0;
     overflow-wrap: anywhere;
   }
+  .lists {
+    flex: 1;
+    overflow: auto;
+    min-height: 0;
+  }
   h3 {
     font-size: 12px;
     text-transform: uppercase;
@@ -86,8 +118,6 @@
     list-style: none;
     margin: 0;
     padding: 0 0 6px;
-    overflow: auto;
-    flex: 1;
   }
   li {
     display: flex;
@@ -101,8 +131,10 @@
     font-family: var(--mono);
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
   }
-  .size {
+  .size,
+  .tag {
     font-size: 11px;
   }
   li button {

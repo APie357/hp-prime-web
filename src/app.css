@@ -83,6 +83,8 @@ code {
 }
 .panel > header .actions button {
   padding: 0 7px;
+  font-size: 12px;
+  white-space: nowrap;
 }
 h2 {
   font-size: 11px;

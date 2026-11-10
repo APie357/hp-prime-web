@@ -15,6 +15,7 @@ import {
   type ScreenPayload,
 } from './parsers';
 import type { ReportPort } from './port';
+import { decodeNote, encodeNote } from '../files/note';
 
 export class TimeoutError extends Error {
   constructor(what: string) {
@@ -31,12 +32,37 @@ export interface Timeouts {
 
 const DEFAULT_TIMEOUTS: Timeouts = { first: 4000, between: 2500 };
 
-export interface SendProgramResult {
+/** Text objects the IDE edits. */
+export type TextKind = 'program' | 'note';
+
+export const KIND_TYPE: Record<TextKind, number> = {
+  program: C.ObjType.PROGRAM,
+  note: C.ObjType.NOTE,
+};
+
+export interface TextObject {
+  kind: TextKind;
+  name: string;
+  text: string;
+  /** Note has rich formatting that a plain-text upload would replace. */
+  formatted: boolean;
+}
+
+export interface SendTextResult {
+  kind: TextKind;
   name: string;
   bytes: number;
   refused: boolean;
   verified: 'match' | 'mismatch' | 'no-reply' | 'skipped';
   readback?: string;
+}
+
+export function decodeText(kind: TextKind, data: Uint8Array): { text: string; formatted: boolean } {
+  return kind === 'note' ? decodeNote(data) : { text: fromUtf16le(data), formatted: false };
+}
+
+export function isValidName(kind: TextKind, name: string): boolean {
+  return kind === 'program' ? C.isValidProgramName(name) : C.isValidNoteName(name);
 }
 
 export interface BackupProgress {
@@ -145,36 +171,48 @@ export class PrimeSession {
     }
   }
 
-  /** Upload a PPL program as raw UTF-16LE text, then read it back to verify. */
-  sendProgram(name: string, source: string, verify = true): Promise<SendProgramResult> {
+  /**
+   * Upload a program or note as raw UTF-16LE text (no BOM, no container),
+   * then read it back to verify.
+   */
+  sendText(kind: TextKind, name: string, source: string, verify = true): Promise<SendTextResult> {
     return this.exclusive(async () => {
-      if (!C.isValidProgramName(name)) throw new Error(`"${name}" is not a valid program name`);
+      if (!isValidName(kind, name)) throw new Error(`"${name}" is not a valid ${kind} name`);
       const text = normalizeSource(source);
-      const payload = utf16le(text);
-      if (payload.length > C.LEGACY_PROGRAM_PAYLOAD_WARN) {
+      const payload = kind === 'note' ? encodeNote(text) : utf16le(text);
+      if (kind === 'program' && payload.length > C.LEGACY_PROGRAM_PAYLOAD_WARN) {
         log('warn', `${name} is ${payload.length} B; uploads above ${C.LEGACY_PROGRAM_PAYLOAD_WARN} B were dropped on G1 firmware`);
       }
-      const { refused } = await this.sendFileUnlocked(C.ObjType.PROGRAM, name, payload);
-      const res: SendProgramResult = { name, bytes: payload.length, refused, verified: 'skipped' };
+      const { refused } = await this.sendFileUnlocked(KIND_TYPE[kind], name, payload);
+      const res: SendTextResult = { kind, name, bytes: payload.length, refused, verified: 'skipped' };
       if (refused || !verify) return res;
       // Give the calculator a moment to store/compile.
       await sleep(250);
-      const back = await this.requestFileUnlocked(C.ObjType.PROGRAM, name, 4000);
+      const back = await this.requestFileUnlocked(KIND_TYPE[kind], name, 4000);
       if (!back) {
         res.verified = 'no-reply';
         return res;
       }
-      res.readback = fromUtf16le(back.data);
+      res.readback = decodeText(kind, back.data).text;
       res.verified = normalizeSource(res.readback) === text ? 'match' : 'mismatch';
       return res;
     });
   }
 
-  readProgram(name: string): Promise<string | null> {
+  /** F8 for a program or note; null when the calculator stays silent. */
+  readText(kind: TextKind, name: string, timeoutMs = 4000): Promise<TextObject | null> {
     return this.exclusive(async () => {
-      const f = await this.requestFileUnlocked(C.ObjType.PROGRAM, name, 4000);
-      return f ? fromUtf16le(f.data) : null;
+      const f = await this.requestFileUnlocked(KIND_TYPE[kind], name, timeoutMs);
+      return f ? { kind, name: f.name, ...decodeText(kind, f.data) } : null;
     });
+  }
+
+  sendProgram(name: string, source: string, verify = true): Promise<SendTextResult> {
+    return this.sendText('program', name, source, verify);
+  }
+
+  async readProgram(name: string): Promise<string | null> {
+    return (await this.readText('program', name))?.text ?? null;
   }
 
   /** F9 — receive every object. Ends on an F9 frame or when the stream goes quiet. */
@@ -220,8 +258,24 @@ export class PrimeSession {
     return this.exclusive(() => this.sendMessage(C.sendChat(text)));
   }
 
-  setDateTime(d = new Date()): Promise<void> {
-    return this.exclusive(() => this.sendMessage(C.setDateTime(d)));
+  /**
+   * E7 — set the clock. The calculator sends no reply, so follow up with a
+   * ready check: a healthy link afterwards is the only signal available.
+   */
+  setDateTime(d = new Date()): Promise<boolean> {
+    return this.exclusive(async () => {
+      this.port.drain();
+      await this.sendMessage(C.setDateTime(d));
+      await sleep(150);
+      this.port.drain();
+      try {
+        const r = await this.exchange(C.checkReady(), 'ready reply', 2000);
+        return r[0] === C.READY_REPLY || r[0] === C.CMD.READY;
+      } catch (e) {
+        if (e instanceof TimeoutError) return false;
+        throw e;
+      }
+    });
   }
 
   /** Send an arbitrary logical message; optionally wait for one reply. */

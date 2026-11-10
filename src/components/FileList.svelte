@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { folderAccessSupported } from '../lib/files/workspace';
+  import { folderAccessSupported, kindFromFile } from '../lib/files/workspace';
   import {
     app,
     deleteFile,
@@ -13,9 +13,10 @@
 
 <section class="panel">
   <header>
-    <h2>Workspace</h2>
+    <h2>Files</h2>
     <div class="actions">
-      <button title="New program" onclick={newFile}>＋</button>
+      <button title="New program" onclick={() => newFile('program')}>＋ Prgm</button>
+      <button title="New note" onclick={() => newFile('note')}>＋ Note</button>
       <button title="Refresh" onclick={refreshFiles}>⟳</button>
     </div>
   </header>
@@ -42,12 +43,12 @@
     {#each app.files as f (f)}
       <li class:active={app.current === f}>
         <button class="file" onclick={() => (app.current = f)} title={f}>
-          {f}{#if app.dirty.includes(f)}<span class="dot">●</span>{/if}
+          <span class="icon" title={kindFromFile(f)}>{kindFromFile(f) === 'note' ? '✎' : '▸'}</span>{f}{#if app.dirty.includes(f)}<span class="dot">●</span>{/if}
         </button>
         <button class="del" title="Delete" onclick={() => deleteFile(f)}>✕</button>
       </li>
     {:else}
-      <li class="none">No programs yet</li>
+      <li class="none">No files yet</li>
     {/each}
   </ul>
 </section>
@@ -110,6 +111,11 @@
   }
   li:hover .del {
     visibility: visible;
+  }
+  .icon {
+    display: inline-block;
+    width: 14px;
+    color: var(--muted);
   }
   .dot {
     color: var(--accent);

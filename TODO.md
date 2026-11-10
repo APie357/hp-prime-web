@@ -23,8 +23,11 @@ The user confirmed on 2026-11-09 that connect, send, receive, list, and fetch wo
   - [ ] Key-injection probe: screenshot → Home → screenshot → diff; record the result in AGENTS.md
   - [ ] If keys work: **Send & Run** (Home → type the name with Alpha → Enter) and a live screen view
 - [ ] Delete a program on the calculator (`EB`), with confirmation and verification afterwards
-- [ ] Notes (type `0x05`): list, fetch, edit, send
-- [ ] Set the calculator clock (`E7`)
+- [x] Notes (type `0x05`): list, fetch, edit, send (plain text; rich formatting is replaced on upload)
+- [ ] Verify notes on the G2: plain-text upload shows correctly in the Notes app, and the formatting warning appears for rich notes
+- [ ] Optional: preserve rich formatting when the plain text hasn't changed
+- [x] Set the calculator clock (`E7`) — **Sync clock** button
+- [ ] Verify clock sync on the G2 (correct date and time, timezone)
 - [ ] Chat send/receive (`F2`)
 - [ ] Full backup to a `.zip`
 - [ ] Auto-reconnect to an already-granted calculator on page load

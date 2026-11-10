@@ -27,7 +27,7 @@ describe('PrimeSession', () => {
       const r = await s.sendProgram('WEBTEST', big);
       expect(r.refused).toBe(false);
       expect(r.verified).toBe('match');
-      expect(calc.programs.get('WEBTEST')).toBe(big.replace(/\r\n/g, '\n'));
+      expect(calc.program('WEBTEST')).toBe(big.replace(/\r\n/g, '\n'));
     });
   }
 
@@ -45,8 +45,8 @@ describe('PrimeSession', () => {
 
   it('runs a backup', async () => {
     const { s, calc } = session();
-    calc.programs.set('A', 'EXPORT A()\nBEGIN\nEND;');
-    calc.programs.set('B', 'EXPORT B()\nBEGIN\nEND;');
+    calc.setProgram('A', 'EXPORT A()\nBEGIN\nEND;');
+    calc.setProgram('B', 'EXPORT B()\nBEGIN\nEND;');
     const files = await s.backup();
     expect(files.map((f) => f.name)).toEqual(['A', 'B']);
   });
@@ -56,6 +56,29 @@ describe('PrimeSession', () => {
     const [a, b, c] = await Promise.all([s.ready(), s.info(), s.ready()]);
     expect(a && c).toBe(true);
     expect(b.serial).toBe('SN12345678');
+  });
+
+  it('sends and reads a note separately from a program of the same name', async () => {
+    const { s, calc } = session();
+    calc.setProgram('Todo', 'EXPORT Todo()\nBEGIN\nEND;');
+    const r = await s.sendText('note', 'Todo', 'buy batteries\r\nfor the calc');
+    expect(r.verified).toBe('match');
+    const note = await s.readText('note', 'Todo');
+    expect(note).toMatchObject({ kind: 'note', name: 'Todo', text: 'buy batteries\nfor the calc', formatted: false });
+    expect(await s.readProgram('Todo')).toBe('EXPORT Todo()\nBEGIN\nEND;');
+  });
+
+  it('accepts note names with spaces but not program names', async () => {
+    const { s } = session();
+    expect((await s.sendText('note', 'My notes', 'x')).verified).toBe('match');
+    await expect(s.sendText('program', 'My notes', 'x')).rejects.toThrow(/not a valid program name/);
+  });
+
+  it('sets the clock and confirms the link with a ready check', async () => {
+    const { s, calc } = session();
+    const ok = await s.setDateTime(new Date(2026, 10, 9, 21, 5, 7));
+    expect(ok).toBe(true);
+    expect(calc.clockSets).toEqual([[0x00, 0x00, 0x54, 0x1e, 26, 11, 9, 21, 5, 7]]);
   });
 
   it('sends keys', async () => {

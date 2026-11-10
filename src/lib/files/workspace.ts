@@ -15,10 +15,23 @@ export interface Workspace {
 }
 
 export const SOURCE_EXT = '.hpppl';
-const SOURCE_RE = /\.(hpppl|ppl|txt)$/i;
+export const NOTE_EXT = '.note';
+const SOURCE_RE = /\.(hpppl|ppl|txt|note)$/i;
 
+export type FileKind = 'program' | 'note';
+
+/** Calculator object name for a workspace file (extension stripped). */
 export function programNameFromFile(file: string): string {
   return file.replace(/\.[^.]+$/, '');
+}
+
+/** `.note` files are notes; everything else is a PPL program. */
+export function kindFromFile(file: string): FileKind {
+  return /\.note$/i.test(file) ? 'note' : 'program';
+}
+
+export function fileFor(kind: FileKind, name: string): string {
+  return name + (kind === 'note' ? NOTE_EXT : SOURCE_EXT);
 }
 
 const metaStore = createStore('hp-prime-web-meta', 'kv');

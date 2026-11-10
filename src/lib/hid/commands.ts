@@ -131,5 +131,13 @@ export function isValidProgramName(name: string): boolean {
   return /^[A-Za-z_][A-Za-z0-9_]{0,63}$/.test(name);
 }
 
+/**
+ * Note names are freer than program names (spaces allowed), but stay away
+ * from characters that are unsafe in file names on the computer side.
+ */
+export function isValidNoteName(name: string): boolean {
+  return name.trim() === name && /^[^\\/:*?"<>|\x00-\x1f]{1,64}$/.test(name);
+}
+
 /** Legacy G1 upload ceiling observed in hpemu; G2 limit unknown → warn only. */
 export const LEGACY_PROGRAM_PAYLOAD_WARN = 15_928;
