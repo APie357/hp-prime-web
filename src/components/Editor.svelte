@@ -1,18 +1,23 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { monaco, PPL } from '../lib/monaco';
+  import type * as Monaco from 'monaco-editor/editor';
   import { kindFromFile } from '../lib/files/workspace';
   import { app, editorBridge, markDirty, readFile, saveFile, sendCurrent } from '../lib/state.svelte';
 
   let host: HTMLDivElement;
-  let editor: monaco.editor.IStandaloneCodeEditor | undefined;
-  const models = new Map<string, monaco.editor.ITextModel>();
+  // Monaco (~3 MB) is loaded on mount, after the rest of the UI has rendered.
+  type MonacoModule = typeof import('../lib/monaco');
+  let lib: MonacoModule | undefined;
+  let editor = $state.raw<Monaco.editor.IStandaloneCodeEditor | undefined>();
+  let loadError = $state<string | null>(null);
+  const models = new Map<string, Monaco.editor.ITextModel>();
   const saveTimers = new Map<string, ReturnType<typeof setTimeout>>();
   let loading = false;
 
-  function modelFor(file: string, text: string): monaco.editor.ITextModel {
+  function modelFor(file: string, text: string): Monaco.editor.ITextModel {
     let m = models.get(file);
     if (m) return m;
+    const { monaco, PPL } = lib!;
     const language = kindFromFile(file) === 'note' ? 'plaintext' : PPL;
     m = monaco.editor.createModel(text, language, monaco.Uri.file('/' + file));
     m.onDidChangeContent(() => {
@@ -39,8 +44,17 @@
     models.delete(file);
   };
 
-  onMount(() => {
-    editor = monaco.editor.create(host, {
+  let disposed = false;
+  async function init() {
+    try {
+      lib = await import('../lib/monaco');
+    } catch (e) {
+      loadError = e instanceof Error ? e.message : String(e);
+      return;
+    }
+    if (disposed) return;
+    const { monaco, PPL } = lib;
+    const ed = monaco.editor.create(host, {
       theme: 'prime-dark',
       automaticLayout: true,
       fontSize: 14,
@@ -50,13 +64,13 @@
       renderWhitespace: 'selection',
       model: null,
     });
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+    ed.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
       if (app.current) saveFile(app.current);
     });
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => sendCurrent());
+    ed.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => sendCurrent());
     // Assignment operators: `:=`, and the calculator's Sto▶ arrow (`value▶var`).
     const typeAction = (id: string, label: string, key: number, text: string) =>
-      editor!.addAction({
+      ed.addAction({
         id,
         label,
         keybindings: [key],
@@ -66,7 +80,13 @@
       });
     typeAction('ppl.insertAssign', 'PPL: Insert := (assign)', monaco.KeyMod.Alt | monaco.KeyCode.Equal, ':=');
     typeAction('ppl.insertStore', 'PPL: Insert ▶ (store)', monaco.KeyMod.Alt | monaco.KeyCode.Period, '▶');
+    editor = ed; // triggers the model effect below
+  }
+
+  onMount(() => {
+    init();
     return () => {
+      disposed = true;
       editor?.dispose();
       for (const m of models.values()) m.dispose();
     };
@@ -103,6 +123,10 @@
       <p class="hint">Create a program or note on the left, or pull one from the calculator.</p>
       <p class="hint"><kbd>Ctrl</kbd>+<kbd>S</kbd> save · <kbd>Ctrl</kbd>+<kbd>Enter</kbd> send to calculator</p>
       <p class="hint"><kbd>Alt</kbd>+<kbd>=</kbd> types <code>:=</code> · <kbd>Alt</kbd>+<kbd>.</kbd> types <code>▶</code> · <kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>F</kbd> format</p>
+    </div>
+  {:else if !editor}
+    <div class="empty">
+      <p class="hint">{loadError ? `Editor failed to load: ${loadError}` : 'Loading editor…'}</p>
     </div>
   {/if}
   <div class="editor" bind:this={host}></div>

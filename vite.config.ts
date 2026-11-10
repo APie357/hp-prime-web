@@ -7,6 +7,10 @@ export default defineConfig({
   base: process.env.NODE_ENV === 'production' ? '/hp-prime-web/' : '/',
   plugins: [svelte()],
   worker: { format: 'es' },
+  build: {
+    // Monaco is one ~3.5 MB lazy chunk (Editor.svelte imports it on mount); the entry chunk is ~80 kB.
+    chunkSizeWarningLimit: 4000,
+  },
   test: {
     include: ['tests/**/*.test.ts'],
     environment: 'node',
