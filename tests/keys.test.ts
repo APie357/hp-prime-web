@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { K, KEYS, keysForKeyboardEvent, keysForText, keysToRun } from '../src/lib/hid/keys';
 import { diffFraction } from '../src/lib/screen';
 import { MockPrime } from './mockPrime';
-import { PrimeSession } from '../src/lib/hid/session';
+import { PrimeSession, type KeyMode } from '../src/lib/hid/session';
 
 describe('key table', () => {
   it('has codes 0–50 in order with A–Z on alpha keys', () => {
@@ -36,10 +36,22 @@ describe('typing', () => {
 });
 
 describe('pressKeys', () => {
-  it('sends one EC message per key', async () => {
+  const run = async (mode: KeyMode) => {
     const m = new MockPrime();
-    await new PrimeSession(m).pressKeys([5, 36, 14], 0);
-    expect(m.sentKeys).toEqual([[5], [36], [14]]);
+    await new PrimeSession(m).pressKeys([5, 36, 14], mode, 0);
+    return m.sentKeys;
+  };
+  it('sends one EC message per key', async () => {
+    expect(await run('single')).toEqual([[5], [36], [14]]);
+    expect(await run('ready')).toEqual([[5], [36], [14]]);
+  });
+  it('batches keys or adds a release code', async () => {
+    expect(await run('batch')).toEqual([[5, 36, 14]]);
+    expect(await run('release')).toEqual([[5, 0x85], [36, 0xa4], [14, 0x8e]]);
+  });
+  it('matches the hplp single-key layout', async () => {
+    const C = await import('../src/lib/hid/commands');
+    expect(Array.from(C.sendKeys([38]))).toEqual([0xec, 0x01, 0, 0, 0, 1, 38]);
   });
 });
 

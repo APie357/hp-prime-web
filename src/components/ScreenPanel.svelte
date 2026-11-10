@@ -2,6 +2,7 @@
   import Keypad from './Keypad.svelte';
   import { keysForKeyboardEvent } from '../lib/hid/keys';
   import type { PixelMode } from '../lib/screen';
+  import type { KeyMode } from '../lib/hid/session';
   import {
     app,
     captureScreen,
@@ -9,6 +10,7 @@
     probeKeys,
     screen,
     setLive,
+    setKeyMode,
     setPixelMode,
     toggleKeypad,
   } from '../lib/state.svelte';
@@ -101,7 +103,18 @@
     >
       Test keys
     </button>
-    <span class="muted">Remote keys: <span class:ok={screen.keysWork} class:bad={screen.keysWork === false}>{keysNote}</span></span>
+    <span class="muted">Keys: <span class:ok={screen.keysWork} class:bad={screen.keysWork === false}>{keysNote}</span></span>
+    <select
+      value={screen.keyMode}
+      onchange={(e) => setKeyMode(e.currentTarget.value as KeyMode)}
+      title="How key presses are sent (experimental). If keys only appear after you press a real key, try another mode."
+      aria-label="Key mode"
+    >
+      <option value="single">One per message</option>
+      <option value="batch">All in one message</option>
+      <option value="release">Press + release</option>
+      <option value="ready">Then ready check</option>
+    </select>
   </div>
 
   {#if screen.showKeypad && app.connected}

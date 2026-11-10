@@ -65,6 +65,10 @@ export function isValidName(kind: TextKind, name: string): boolean {
   return kind === 'program' ? C.isValidProgramName(name) : C.isValidNoteName(name);
 }
 
+/** How `pressKeys` encodes key presses; see there. */
+export type KeyMode = 'single' | 'batch' | 'release' | 'ready';
+export const KEY_MODES: KeyMode[] = ['single', 'batch', 'release', 'ready'];
+
 export interface BackupProgress {
   count: number;
   last?: PrimeFile;
@@ -255,15 +259,31 @@ export class PrimeSession {
   }
 
   /**
-   * Press keys one `EC` message at a time with a gap between them, so the calculator's UI can keep
-   * up (sending a whole sequence in one message is untested). The whole sequence holds the link,
-   * so a screenshot poll can't interleave with it.
+   * Press keys with `EC` (layout as in hplp: `EC 01 len(u32BE) codes…`). On the G2 a plain key is
+   * queued but not processed until a physical key press, so `mode` selects experimental variants:
+   * - `single`: one message per key, with `gapMs` between them
+   * - `batch`: every key in one message
+   * - `release`: one message per key carrying the code and then code | 0x80 (a guessed key-up)
+   * - `ready`: like `single`, then a ready check, in case a reply round-trip wakes the UI
+   * The whole sequence holds the link, so a screenshot poll can't interleave with it.
    */
-  pressKeys(codes: number[], gapMs = 80): Promise<void> {
+  pressKeys(codes: number[], mode: KeyMode = 'single', gapMs = 80): Promise<void> {
     return this.exclusive(async () => {
+      if (mode === 'batch') {
+        await this.sendMessage(C.sendKeys(codes));
+        return;
+      }
       for (let i = 0; i < codes.length; i++) {
         if (i) await sleep(gapMs);
-        await this.sendMessage(C.sendKeys([codes[i]]));
+        const c = codes[i];
+        await this.sendMessage(C.sendKeys(mode === 'release' ? [c, c | 0x80] : [c]));
+      }
+      if (mode === 'ready') {
+        try {
+          await this.exchange(C.checkReady(), 'ready reply', 1000);
+        } catch (e) {
+          if (!(e instanceof TimeoutError)) throw e;
+        }
       }
     });
   }

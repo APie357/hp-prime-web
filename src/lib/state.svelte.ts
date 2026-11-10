@@ -1,6 +1,6 @@
 /** Application state and actions shared by the components. */
 import { log } from './hid/log';
-import { decodeText, isValidName, PrimeSession, type TextKind } from './hid/session';
+import { decodeText, isValidName, KEY_MODES, PrimeSession, type KeyMode, type TextKind } from './hid/session';
 import { grantedPrimes, requestPrime, WebHidPort, webHidSupported } from './hid/transport';
 import type { DeviceInfo } from './hid/parsers';
 import { ObjType } from './hid/commands';
@@ -56,6 +56,7 @@ export const screen = $state({
   mode: (loadString('pixelMode') ?? 'rgb555le') as PixelMode,
   /** Result of the key-injection probe on this browser: null = not tested yet. */
   keysWork: loadTri('keysWork'),
+  keyMode: (KEY_MODES as string[]).includes(loadString('keyMode') ?? '') ? (loadString('keyMode') as KeyMode) : 'single',
   showKeypad: loadPref('showKeypad', false),
 });
 
@@ -383,7 +384,7 @@ let refreshTimer: ReturnType<typeof setTimeout> | undefined;
 export async function pressKeys(codes: number[]): Promise<void> {
   if (!session || !codes.length) return;
   try {
-    await session.pressKeys(codes);
+    await session.pressKeys(codes, screen.keyMode);
   } catch (e) {
     setStatus(`Key press failed: ${(e as Error).message}`, 'error');
     return;
@@ -391,6 +392,14 @@ export async function pressKeys(codes: number[]): Promise<void> {
   if (screen.live) return;
   clearTimeout(refreshTimer);
   refreshTimer = setTimeout(() => void captureScreen(), 350);
+}
+
+/** Switch how keys are encoded; forgets the probe result, which belonged to the old mode. */
+export function setKeyMode(mode: KeyMode): void {
+  screen.keyMode = mode;
+  saveString('keyMode', mode);
+  screen.keysWork = null;
+  saveString('keysWork', null);
 }
 
 function rememberKeysWork(v: boolean): void {
@@ -405,14 +414,14 @@ function rememberKeysWork(v: boolean): void {
 export async function probeKeys(): Promise<void> {
   await busy('Testing key injection', async () => {
     const s = needSession();
-    await s.pressKeys([K.HOME, K.ESC]);
+    await s.pressKeys([K.HOME, K.ESC], screen.keyMode);
     await sleep(400);
     const before = await s.screenshot().then((x) => decodeScreen(x, screen.mode));
-    await s.pressKeys([K.ONE]);
+    await s.pressKeys([K.ONE], screen.keyMode);
     await sleep(400);
     const afterShot = await s.screenshot();
     const after = await decodeScreen(afterShot, screen.mode);
-    await s.pressKeys([K.DEL]);
+    await s.pressKeys([K.DEL], screen.keyMode);
     screen.image = after;
     screen.at = Date.now();
     const changed = diffFraction(before, after);
@@ -456,7 +465,7 @@ export async function sendAndRun(): Promise<void> {
   }
   await busy(`Running ${target.name}`, async () => {
     const before = await captureScreen();
-    await needSession().pressKeys(keysToRun(target.name, args));
+    await needSession().pressKeys(keysToRun(target.name, args), screen.keyMode);
     await sleep(600);
     const after = await captureScreen();
     const call = args ? `${target.name}(${args})` : target.name;

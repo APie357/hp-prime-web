@@ -17,13 +17,14 @@ The user confirmed on 2026-11-09 that connect, send, receive, list, and fetch wo
 
 ## 2. Calculator features
 - [x] Screenshot view (`ScreenPanel.svelte`): Screenshot, Live mirror, Save PNG, pixel-format picker (RGB555 / RGB565 / Gray). Not yet tried on hardware
-  - [ ] On the G2: which pixel format gives correct colors? Make it the default and record it in AGENTS.md
+  - [x] On the G2: the default RGB555 shows the screen correctly
   - [ ] Does the live mirror keep up, and do screenshots work while a program is running?
 - [ ] Experimental run (M5), built 2026-11-10, untested on hardware:
   - [x] Remote keypad (key codes 0–50, Prime layout, alpha letters), plus typing on the focused screen view
   - [x] **Test keys** probe: Home → screenshot → `1` → screenshot → diff → Del; result remembered in localStorage
   - [x] **▶ Send & Run** (Ctrl+Shift+Enter): send → Home, Esc, name via Alpha (+ `( )` and numeric args when the procedure has parameters) → Enter → live screen
-  - [ ] On the G2: does `EC` (one key per message, `EC 01 00 00 00 01 code`) work at all? If not, try all keys in one message, then V2 framing; record the answer in AGENTS.md
+  - [x] On the G2: `EC 01 00 00 00 01 code` reaches the calculator but is only *queued*: the key appears when a physical key is pressed (and the battery icon then disappears)
+  - [ ] Try the key modes (all in one message / press + release / then ready check) and record which one, if any, makes keys take effect immediately; then V2 framing as a last resort
   - [ ] On the G2: is lower case Alpha → Shift → key? Is there a key sequence for `_`?
 - [ ] Delete a program on the calculator (`EB`), with confirmation and verification afterwards
 - [x] Notes (type `0x05`): list, fetch, edit, send (plain text; rich formatting is replaced on upload)
