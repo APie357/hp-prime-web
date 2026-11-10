@@ -1,9 +1,22 @@
 # HP Prime Web IDE — Plan
 
 ## Context
-The goal is a browser IDE for writing HP Prime PPL ("HP Basic") programs and sending them to a real calculator over **WebHID**, with syntax highlighting and IntelliSense. More features (backup, notes, remote keypad, …) come later. The working directory `/home/andrew/Projects/claude/hp-prime-web` is empty (not a git repo). Per the user, **the plan lives in `AGENTS.md`**: the first implementation step copies this plan (plus the protocol notes below) into `AGENTS.md` at the repo root and keeps it updated as milestones land.
+The goal is a browser IDE for writing HP Prime PPL ("HP Basic") programs and sending them to a real calculator over **WebHID**, with syntax highlighting and IntelliSense. More features (backup, notes, remote keypad, …) come later. Per the user, **the plan lives in this file (`AGENTS.md`)**. Keep it updated as milestones land.
 
 **User decisions:** the target hardware is the **HP Prime G2** (USB `03F0:2441`). The stack is **Vite + TypeScript + Svelte 5 + Monaco**. Storage is a **local folder (File System Access API) with IndexedDB fallback**. "Run" is a reliable **Send**, plus an **opt-in experimental Send & Run** that uses key injection, with a screenshot check.
+
+## Status (keep current)
+- **Done:** M1 scaffold. M2 protocol core plus unit tests (`npm test`). M4 core: send the program with an overwrite check and read-back verify, list calculator programs (F9 backup), fetch by name (F8), open into the workspace. The editor is Monaco with *minimal* PPL highlighting. The workspace is a folder (FS Access) or browser storage, with autosave. The console has a hex packet log, a pad-reports toggle, and raw send.
+- **Paused by the user (2026-11-09):** rich language features (catalog, completion, hover, signature help, outline, lint). Only a minimal Monarch tokenizer exists (`src/lib/monaco.ts`). `src/lib/lang/lexer.ts` is ready for the analyzer when this resumes; the seed data is hpemu `crates/ppl-compiler/src/builtins.rs` (163 builtins with arities).
+- **Not yet verified on real hardware.** The first G2 run must confirm the Verification steps below and record the results here. That includes whether `pad reports` is needed.
+- **Next:** hardware verification → screenshot view → `.hpprgm` import/export → experimental run (M5) → language features (M3 rest).
+
+## Conventions
+- Protocol code in `src/lib/hid/` stays framework-free and unit-tested. The UI talks to it only through `src/lib/state.svelte.ts`.
+- `PrimeSession` serializes all operations. Never touch the port outside it.
+- Program uploads are raw UTF-16LE text with no BOM, `\n` line endings, and no `.hpprgm` container.
+- A headless smoke test with a fake `navigator.hid` G2 was used during development (not committed). Re-create one when changing the UI flow.
+- Commit messages end with the Co-Authored-By line given by the harness.
 
 ## Protocol findings (from hplp + modern reverse-engineering)
 Sources: `debrouxl/hplp` (`libhpcalcs/src/prime_vpkt.c`, `prime_cmd.c`, `hplibs.h`); `56phil/prime_connection_kit` (MIT; **verified on a G2, firmware V2.060.650**); `golba98/hp-prime-emulator` (MIT; G1 2.2.15157 docs); `BeatSkip/PrimeDev` (a Blazor WebHID app for the G2, with the V2 framing).
