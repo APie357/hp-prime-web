@@ -38,7 +38,26 @@ export const app = $state({
   calcListedAt: 0,
   padReports: false,
   verifyAfterSend: true,
+  showConsole: loadPref('showConsole', false),
 });
+
+function loadPref(key: string, fallback: boolean): boolean {
+  try {
+    const v = localStorage.getItem(`hp-prime-web:${key}`);
+    return v === null ? fallback : v === '1';
+  } catch {
+    return fallback;
+  }
+}
+
+export function toggleConsole(): void {
+  app.showConsole = !app.showConsole;
+  try {
+    localStorage.setItem('hp-prime-web:showConsole', app.showConsole ? '1' : '0');
+  } catch {
+    /* storage unavailable */
+  }
+}
 
 let port: WebHidPort | null = null;
 let session: PrimeSession | null = null;

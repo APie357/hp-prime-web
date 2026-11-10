@@ -2,13 +2,15 @@
 
 Plan, protocol notes and status live in `AGENTS.md`. This is the working task list.
 
-## 1. Real-hardware verification (G2) — do first
-- [ ] Connect: device info shows name and firmware, and the ready check returns `Y`
+## 1. Real-hardware verification (G2)
+The user confirmed on 2026-11-09 that connect, send, receive, list, and fetch work on their G2.
+
+- [x] Connect: device info shows name and firmware, and the ready check returns `Y`
 - [ ] Work out whether **pad reports** is needed for sends to work, and record the answer in AGENTS.md
-- [ ] Send a new program (`WEBTEST`): read-back verifies, it appears in the Program Catalog, and it runs by hand
+- [x] Send a new program (`WEBTEST`): read-back verifies, it appears in the Program Catalog, and it runs by hand
 - [ ] Check that the overwrite prompt appears for an existing name, and that a missing name costs only about 1.5 s
-- [ ] **List programs** (F9 backup): all programs show up, and the end-of-backup frame is detected (not just the quiet timeout)
-- [ ] **Fetch** by name round-trips the text exactly (line endings, trailing NUL, non-ASCII characters such as `▶`, `≤`, `π`)
+- [x] **List programs** (F9 backup): all programs show up, and the end-of-backup frame is detected (not just the quiet timeout)
+- [x] **Fetch** by name round-trips the text exactly (line endings, trailing NUL, non-ASCII characters such as `▶`, `≤`, `π`)
 - [ ] Large program (>16 KB): does the G2 accept it? Adjust the size warning
 - [ ] Unplug/replug while connected: the UI recovers cleanly
 - [ ] G1 (`0x1541`), if one is available: same checklist with 64-byte reports

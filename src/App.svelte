@@ -4,13 +4,22 @@
   import FileList from './components/FileList.svelte';
   import CalcPanel from './components/CalcPanel.svelte';
   import Console from './components/Console.svelte';
-  import { app, connect, disconnect, initWorkspace, sendCurrent } from './lib/state.svelte';
+  import { app, connect, disconnect, initWorkspace, sendCurrent, toggleConsole } from './lib/state.svelte';
   import { programNameFromFile } from './lib/files/workspace';
 
   onMount(() => {
     initWorkspace();
   });
+
+  function onKey(e: KeyboardEvent) {
+    if ((e.ctrlKey || e.metaKey) && e.key === '`') {
+      e.preventDefault();
+      toggleConsole();
+    }
+  }
 </script>
+
+<svelte:window onkeydown={onKey} />
 
 <div class="app">
   <header class="toolbar">
@@ -46,10 +55,23 @@
     <aside class="right"><CalcPanel /></aside>
   </main>
 
-  <div class="bottom"><Console /></div>
+  {#if app.showConsole}
+    <div class="bottom"><Console /></div>
+  {/if}
 
   <footer class="status {app.statusKind}">
-    {#if app.busy}<span class="spinner"></span> {app.busy}…{:else}{app.status || 'Ready'}{/if}
+    <span class="msg">
+      {#if app.busy}<span class="spinner"></span> {app.busy}…{:else}{app.status || 'Ready'}{/if}
+    </span>
+    <button
+      class="console-toggle"
+      class:on={app.showConsole}
+      onclick={toggleConsole}
+      title="Toggle console (Ctrl+`)"
+      aria-pressed={app.showConsole}
+    >
+      {app.showConsole ? '▾' : '▴'} Console
+    </button>
   </footer>
 </div>
 
@@ -57,7 +79,7 @@
   .app {
     height: 100vh;
     display: grid;
-    grid-template-rows: auto auto minmax(0, 1fr) 200px auto;
+    grid-template-rows: auto auto minmax(0, 1fr) auto auto;
   }
   .toolbar { grid-row: 1; }
   .banner { grid-row: 2; }
@@ -116,16 +138,39 @@
   }
   .bottom {
     border-top: 1px solid var(--border);
+    height: 200px;
     min-height: 0;
   }
   .status {
+    display: flex;
+    align-items: center;
+    gap: 12px;
     font-size: 12px;
-    padding: 3px 12px;
+    padding: 0 0 0 12px;
     background: #1b4f8a;
     color: #fff;
+  }
+  .msg {
+    flex: 1;
+    min-width: 0;
+    padding: 3px 0;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+  .console-toggle {
+    flex: none;
+    font-size: 12px;
+    color: #fff;
+    background: transparent;
+    border: none;
+    border-left: 1px solid #ffffff33;
+    border-radius: 0;
+    padding: 3px 12px;
+  }
+  .console-toggle:hover,
+  .console-toggle.on {
+    background: #ffffff22;
   }
   .status.error {
     background: #8a2b2b;

@@ -8,8 +8,9 @@ The goal is a browser IDE for writing HP Prime PPL ("HP Basic") programs and sen
 ## Status (keep current)
 - **Done:** M1 scaffold. M2 protocol core plus unit tests (`npm test`). M4 core: send the program with an overwrite check and read-back verify, list calculator programs (F9 backup), fetch by name (F8), open into the workspace. The editor is Monaco with *minimal* PPL highlighting. The workspace is a folder (FS Access) or browser storage, with autosave. The console has a hex packet log, a pad-reports toggle, and raw send.
 - **Paused by the user (2026-11-09):** rich language features (catalog, completion, hover, signature help, outline, lint). Only a minimal Monarch tokenizer exists (`src/lib/monaco.ts`). `src/lib/lang/lexer.ts` is ready for the analyzer when this resumes; the seed data is hpemu `crates/ppl-compiler/src/builtins.rs` (163 builtins with arities).
-- **Not yet verified on real hardware.** The first G2 run must confirm the Verification steps below and record the results here. That includes whether `pad reports` is needed.
-- **Next:** hardware verification → screenshot view → `.hpprgm` import/export → experimental run (M5) → language features (M3 rest).
+- **Verified on the user's G2 (2026-11-09):** connect, send (with read-back), receive, list (F9), and fetch (F8) all work with legacy framing. Not yet checked: whether `pad reports` matters, large programs, replug recovery. See TODO.md §1.
+- **UI:** the console is hidden by default and toggled from the status bar or with Ctrl+` (remembered in localStorage).
+- **Next:** remaining hardware checks → screenshot view → `.hpprgm` import/export → experimental run (M5) → language features (M3 rest).
 
 ## Conventions
 - Repo: https://github.com/APie357/hp-prime-web (public). Every push to `main` runs `.github/workflows/pages.yml` (test → build → deploy) to https://apie357.github.io/hp-prime-web/. Vite's `base` is `/hp-prime-web/` in production builds.
