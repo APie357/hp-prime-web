@@ -40,8 +40,10 @@ The user confirmed on 2026-11-09 that connect, send, receive, list, and fetch wo
 - [x] Snippets: `EXPORT` procedure, `IF/THEN/ELSE/END`, `FOR`, `WHILE`, `REPEAT`, `CASE`
 - [x] Outline, go-to-definition, folding for `BEGIN…END` and other blocks (`src/lib/lang/symbols.ts`; not yet tried in a browser)
 - [x] Lint (`src/lib/lang/diagnostics.ts`; not yet tried in a browser): unbalanced blocks and brackets, unterminated strings, missing `;`, `=` vs `:=`, built-in argument counts, assignment to undeclared variables, lower-case commands, duplicate declarations
-- [ ] Optional: shortcut for typing `▶` (declined for now)
-- [ ] Optional: formatter
+- [x] Assignment shortcuts: **Alt+=** types `:=`, **Alt+.** types `▶` (editor actions, PPL files only; also in the F1 command palette). Not yet tried in a browser
+- [x] Formatter (`src/lib/lang/format.ts`; Shift+Alt+F or right-click → Format Document): re-indents by block, upper-cases keywords, trims trailing whitespace, collapses blank lines; leaves strings, comments, command case and `#cas…#end` alone. Unit-tested, not yet tried in a browser
+- [x] Highlight built-in commands (case-sensitive, so lower-case CAS calls and user variables aren't colored as commands); not yet tried in a browser
+- [ ] Try all language features in a browser (completion, hover, signature help, outline, go-to-definition, folding, lint markers, formatter, highlighting) — deferred: no room for a headless Chromium on the dev machine
 
 ## 4. Workspace / UI
 - [ ] Rename files

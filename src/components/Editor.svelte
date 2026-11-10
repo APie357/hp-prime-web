@@ -54,6 +54,18 @@
       if (app.current) saveFile(app.current);
     });
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => sendCurrent());
+    // Assignment operators: `:=`, and the calculator's Sto▶ arrow (`value▶var`).
+    const typeAction = (id: string, label: string, key: number, text: string) =>
+      editor!.addAction({
+        id,
+        label,
+        keybindings: [key],
+        precondition: `editorLangId == ${PPL}`,
+        // 'type' goes through Monaco's typing path: multi-cursor, selections and undo work as usual.
+        run: (ed) => ed.trigger('keyboard', 'type', { text }),
+      });
+    typeAction('ppl.insertAssign', 'PPL: Insert := (assign)', monaco.KeyMod.Alt | monaco.KeyCode.Equal, ':=');
+    typeAction('ppl.insertStore', 'PPL: Insert ▶ (store)', monaco.KeyMod.Alt | monaco.KeyCode.Period, '▶');
     return () => {
       editor?.dispose();
       for (const m of models.values()) m.dispose();
@@ -90,6 +102,7 @@
       <p>No file open.</p>
       <p class="hint">Create a program or note on the left, or pull one from the calculator.</p>
       <p class="hint"><kbd>Ctrl</kbd>+<kbd>S</kbd> save · <kbd>Ctrl</kbd>+<kbd>Enter</kbd> send to calculator</p>
+      <p class="hint"><kbd>Alt</kbd>+<kbd>=</kbd> types <code>:=</code> · <kbd>Alt</kbd>+<kbd>.</kbd> types <code>▶</code> · <kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>F</kbd> format</p>
     </div>
   {/if}
   <div class="editor" bind:this={host}></div>

@@ -10,6 +10,7 @@ import {
   type Command,
 } from './catalog';
 import { analyze, findSymbol, visibleAt, type Analysis, type Sym } from './symbols';
+import { formatPpl } from './format';
 
 const analysisCache = new WeakMap<object, { version: number; analysis: Analysis }>();
 
@@ -152,6 +153,20 @@ function bestSignature(cmd: Command, argIndex: number): number {
   const counts = cmd.signatures.map((s) => parseSignature(s).params.length);
   const exact = counts.findIndex((n) => n > argIndex);
   return exact >= 0 ? exact : counts.length - 1;
+}
+
+/**
+ * The smallest single edit turning `before` into `after`, as offsets into `before`: the common
+ * prefix and suffix are kept so the cursor, folding and undo stay put.
+ */
+export function minimalEdit(before: string, after: string): { start: number; end: number; text: string } | null {
+  if (before === after) return null;
+  let head = 0;
+  const max = Math.min(before.length, after.length);
+  while (head < max && before[head] === after[head]) head++;
+  let tail = 0;
+  while (tail < max - head && before[before.length - 1 - tail] === after[after.length - 1 - tail]) tail++;
+  return { start: head, end: before.length - tail, text: after.slice(head, after.length - tail) };
 }
 
 export function registerPplProviders(monaco: typeof Monaco, languageId: string): void {
@@ -326,6 +341,22 @@ export function registerPplProviders(monaco: typeof Monaco, languageId: string):
   monaco.languages.registerFoldingRangeProvider(languageId, {
     provideFoldingRanges(model) {
       return analysisFor(model).folds.map((f) => ({ start: f.start, end: f.end }));
+    },
+  });
+
+  monaco.languages.registerDocumentFormattingEditProvider(languageId, {
+    displayName: 'PPL',
+    provideDocumentFormattingEdits(model, options) {
+      const indent = options.insertSpaces ? ' '.repeat(options.tabSize) : '\t';
+      const before = model.getValue();
+      const eol = model.getEOL();
+      let after = formatPpl(before, { indent });
+      if (eol !== '\n') after = after.replace(/\n/g, eol);
+      const e = minimalEdit(before, after);
+      if (!e) return [];
+      const from = model.getPositionAt(e.start);
+      const to = model.getPositionAt(e.end);
+      return [{ range: new monaco.Range(from.lineNumber, from.column, to.lineNumber, to.column), text: e.text }];
     },
   });
 }

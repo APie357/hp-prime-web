@@ -1,8 +1,9 @@
-/** Monaco bootstrap: core editor + contributions, one worker, minimal PPL language. */
+/** Monaco bootstrap: core editor + contributions, one worker, PPL language. */
 import * as monaco from 'monaco-editor/editor';
 import 'monaco-editor/features/register.all';
 import EditorWorker from 'monaco-editor/editor/editor.worker?worker';
 import { KEYWORDS } from './lang/lexer';
+import { COMMANDS } from './lang/catalog';
 import { registerPplProviders } from './lang/providers';
 import { registerDiagnostics } from './lang/diagnostics';
 
@@ -39,18 +40,23 @@ monaco.languages.setLanguageConfiguration(PPL, {
   },
 });
 
-// Minimal highlighting; richer language support (completion, hover, lint) comes later.
+// Keywords are case-insensitive on the calculator; built-in commands are not (lower case calls the
+// CAS version), so the tokenizer is case-sensitive and lists the common keyword spellings.
+const keywordSpellings = KEYWORDS.flatMap((k) => [k, k.toLowerCase(), k[0] + k.slice(1).toLowerCase()]);
+const builtins = COMMANDS.flatMap((c) => [c.name, ...(c.aliases ?? [])]);
+
 monaco.languages.setMonarchTokensProvider(PPL, {
-  ignoreCase: true,
-  keywords: KEYWORDS,
+  ignoreCase: false,
+  keywords: keywordSpellings,
+  builtins,
   tokenizer: {
     root: [
       [/\/\/.*$/, 'comment'],
-      [/#(pragma|cas|end).*$/i, 'keyword.directive'],
+      [/#([Pp][Rr][Aa][Gg][Mm][Aa]|[Cc][Aa][Ss]|[Ee][Nn][Dd]).*$/, 'keyword.directive'],
       [/"/, 'string', '@string'],
       [/#[0-9A-Fa-f]+[hbodHBOD]?(:\d+)?/, 'number.hex'],
       [/\d*\.?\d+([Eeᴇ][-+]?\d+)?/, 'number'],
-      [/[A-Za-z_\u0370-\u03FF][\w\u0370-\u03FF]*/, { cases: { '@keywords': 'keyword', '@default': 'identifier' } }],
+      [/[A-Za-z_\u0370-\u03FF][\w\u0370-\u03FF]*/, { cases: { '@keywords': 'keyword', '@builtins': 'predefined', '@default': 'identifier' } }],
       [/:=|▶|→/, 'operator.assign'],
       [/[<>]=?|==|≠|≤|≥|<>|[-+*/^=]/, 'operator'],
       [/[()[\]{}]/, '@brackets'],
@@ -75,6 +81,7 @@ monaco.editor.defineTheme('prime-dark', {
     { token: 'keyword.directive', foreground: '9CDCFE' },
     { token: 'operator.assign', foreground: 'D7BA7D' },
     { token: 'number.hex', foreground: 'B5CEA8' },
+    { token: 'predefined', foreground: 'DCDCAA' },
   ],
   colors: {},
 });
