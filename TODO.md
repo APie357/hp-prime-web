@@ -52,4 +52,4 @@ The user confirmed on 2026-11-09 that connect, send, receive, list, and fetch wo
 - [ ] Shrink the Monaco bundle (currently about 4 MB; `register.all` pulls in every contribution)
 - [ ] Bump GitHub Actions versions (Node 20 deprecation warning)
 - [ ] Commit the fake-WebHID Playwright smoke test and run it in CI
-- [ ] Decide on a license
+- [x] Decide on a license (MIT)

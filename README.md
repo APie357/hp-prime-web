@@ -31,3 +31,6 @@ npm run build
 ```
 
 Protocol references are listed in `THIRD_PARTY.md`.
+
+## License
+MIT. See `LICENSE`.
