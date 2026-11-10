@@ -11,7 +11,8 @@ The goal is a browser IDE for writing HP Prime PPL ("HP Basic") programs and sen
 - **Verified on the user's G2 (2026-11-09/10):** connect, send (with read-back), receive, list (F9), fetch (F8), large programs (>16 KB), notes (plain-text upload and the formatting warning) and clock sync all work with legacy framing. Unplug/replug while connected recovers cleanly. Not yet checked: whether `pad reports` matters, the overwrite prompt and missing-name timing, a G1. See TODO.md §1.
 - **Notes + clock sync (2026-11-09):** notes are `.note` files (plain text) and send, fetch and list like programs, using type `0x05`. **Sync clock** sends E7 followed by a ready check. Both confirmed on the G2.
 - **UI:** the console is hidden by default and toggled from the status bar or with Ctrl+` (remembered in localStorage).
-- **Next:** remaining hardware checks → screenshot view → `.hpprgm` import/export → experimental run (M5) → language features (M3 rest).
+- **Screen + run (2026-11-10, untested on hardware):** `ScreenPanel.svelte` shows screenshots (single, live mirror, save PNG) with a pixel-format picker, because the G2's 16-bit sample format isn't confirmed. `Keypad.svelte` is a remote keypad, and typing on the focused screen also sends keys (`keysForKeyboardEvent`). The key table and the text→keys mapping are in `src/lib/hid/keys.ts`: upper case is Alpha+key, lower case is Alpha+Shift+key (a guess), and `_` can't be typed. `PrimeSession.pressKeys` sends **one `EC` message per key** with an 80 ms gap. PrimeDev only defines the codes (`HpKey.cs`; `SENDKEY = 0xEC`); no reference builds the message, so the layout is unconfirmed. **Test keys** (`probeKeys`) runs the probe and remembers the result. **▶ Send & Run** sends, then types Home, Esc, the name (`runTarget`: the exported procedure named like the file, else the first exported one; numeric args go inside `( )`), Enter, and turns on the live screen. It warns when the screen didn't change.
+- **Next:** hardware checks (TODO §1, plus screen colors and `EC` on the G2) → `.hpprgm` import/export → language-feature browser check.
 
 ## Conventions
 - Repo: https://github.com/APie357/hp-prime-web (public). Every push to `main` runs `.github/workflows/pages.yml` (test → build → deploy) to https://apie357.github.io/hp-prime-web/. Vite's `base` is `/hp-prime-web/` in production builds.
@@ -54,7 +55,9 @@ src/
     parsers.ts     info (name/version/build/serial), file reply, screenshot → PNG → RGB565→RGBA canvas
     session.ts     PrimeSession: serialized op queue (mutex), perform(msg, expectReply, timeout),
                    sendProgram(), readProgram(), backup(), screenshot(), sendKeys()
+    keys.ts        key codes 0–50 + alpha letters, text→key sequences, Home→name→Enter run sequence
     log.ts         Svelte store of hex-dumped IN/OUT packets for the console
+  lib/screen.ts      screenshot decode (Prime 16-bit PNG or browser) + pixel diff for the probe
   lib/files/
     hpprgm.ts      decode (plain + 7C618AB2 container) / encode plain .hpprgm; UTF-16 helpers
     workspace.ts   FS Access dir handle (persisted in IndexedDB, re-permission on load) + IndexedDB fallback
@@ -76,8 +79,8 @@ src/
     FileTree.svelte    workspace files; new/rename/delete; import/export .hpprgm/.txt
     Editor.svelte      Monaco instance (vite worker import), one model per open file, tabs
     DevicePanel.svelte device info, calculator program list (from backup), pull program into editor
-    ScreenView.svelte  screenshot view; live-poll toggle
-    Keypad.svelte      remote keypad (keycodes 0–50) for the experimental key-injection probe
+    ScreenPanel.svelte screenshot view: live mirror, save PNG, pixel format, Test keys probe, keypad toggle
+    Keypad.svelte      remote keypad (keycodes 0–50) for key injection
     Console.svelte     status log + raw hex packet log + raw "send bytes" box (debug aid)
 tests/               vitest: crc16, framing, commands, parsers, hpprgm, symbols/diagnostics, session (mock transport)
 ```

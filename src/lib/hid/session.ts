@@ -254,6 +254,20 @@ export class PrimeSession {
     return this.exclusive(() => this.sendMessage(C.sendKeys(codes)));
   }
 
+  /**
+   * Press keys one `EC` message at a time with a gap between them, so the calculator's UI can keep
+   * up (sending a whole sequence in one message is untested). The whole sequence holds the link,
+   * so a screenshot poll can't interleave with it.
+   */
+  pressKeys(codes: number[], gapMs = 80): Promise<void> {
+    return this.exclusive(async () => {
+      for (let i = 0; i < codes.length; i++) {
+        if (i) await sleep(gapMs);
+        await this.sendMessage(C.sendKeys([codes[i]]));
+      }
+    });
+  }
+
   sendChat(text: string): Promise<void> {
     return this.exclusive(() => this.sendMessage(C.sendChat(text)));
   }

@@ -4,6 +4,9 @@ import { decodeText, isValidName, PrimeSession, type TextKind } from './hid/sess
 import { grantedPrimes, requestPrime, WebHidPort, webHidSupported } from './hid/transport';
 import type { DeviceInfo } from './hid/parsers';
 import { ObjType } from './hid/commands';
+import { K, keysToRun } from './hid/keys';
+import { decodeScreen, diffFraction, type PixelMode, type RgbaImage } from './screen';
+import { runTarget } from './lang/symbols';
 import {
   fileFor,
   kindFromFile,
@@ -44,6 +47,40 @@ export const app = $state({
   showConsole: loadPref('showConsole', false),
 });
 
+/** Screen mirror. `image` is replaced wholesale, never mutated. */
+export const screen = $state({
+  image: null as RgbaImage | null,
+  at: 0,
+  live: false,
+  error: '',
+  mode: (loadString('pixelMode') ?? 'rgb555le') as PixelMode,
+  /** Result of the key-injection probe on this browser: null = not tested yet. */
+  keysWork: loadTri('keysWork'),
+  showKeypad: loadPref('showKeypad', false),
+});
+
+function loadString(key: string): string | null {
+  try {
+    return localStorage.getItem(`hp-prime-web:${key}`);
+  } catch {
+    return null;
+  }
+}
+
+function saveString(key: string, v: string | null): void {
+  try {
+    if (v === null) localStorage.removeItem(`hp-prime-web:${key}`);
+    else localStorage.setItem(`hp-prime-web:${key}`, v);
+  } catch {
+    /* storage unavailable */
+  }
+}
+
+function loadTri(key: string): boolean | null {
+  const v = loadString(key);
+  return v === null ? null : v === '1';
+}
+
 function loadPref(key: string, fallback: boolean): boolean {
   try {
     const v = localStorage.getItem(`hp-prime-web:${key}`);
@@ -55,11 +92,12 @@ function loadPref(key: string, fallback: boolean): boolean {
 
 export function toggleConsole(): void {
   app.showConsole = !app.showConsole;
-  try {
-    localStorage.setItem('hp-prime-web:showConsole', app.showConsole ? '1' : '0');
-  } catch {
-    /* storage unavailable */
-  }
+  saveString('showConsole', app.showConsole ? '1' : '0');
+}
+
+export function toggleKeypad(): void {
+  screen.showKeypad = !screen.showKeypad;
+  saveString('showKeypad', screen.showKeypad ? '1' : '0');
 }
 
 let port: WebHidPort | null = null;
@@ -132,6 +170,7 @@ export async function disconnect(): Promise<void> {
   app.connected = false;
   app.info = null;
   app.deviceLabel = '';
+  screen.live = false;
   setStatus('Disconnected');
 }
 
@@ -147,6 +186,7 @@ if (app.hidSupported) {
       session = null;
       app.connected = false;
       app.info = null;
+      screen.live = false;
       setStatus('Calculator unplugged', 'error');
     }
   });
@@ -157,24 +197,28 @@ function needSession(): PrimeSession {
   return session;
 }
 
-/** Send the open file to the calculator as a program or note. */
-export async function sendCurrent(): Promise<void> {
+/** Send the open file to the calculator as a program or note. Resolves true when it arrived. */
+export async function sendCurrent(): Promise<boolean> {
   const file = app.current;
-  if (!file) return setStatus('Open a file first', 'error');
+  if (!file) {
+    setStatus('Open a file first', 'error');
+    return false;
+  }
   const text = editorBridge.getText(file);
-  if (text === null) return;
+  if (text === null) return false;
   await saveCurrent();
   const kind = kindFromFile(file);
   const name = programNameFromFile(file);
   if (!isValidName(kind, name)) {
-    return setStatus(
+    setStatus(
       kind === 'program'
         ? `"${name}" is not a valid program name (letters, digits, _; must not start with a digit)`
         : `"${name}" is not a valid note name`,
       'error',
     );
+    return false;
   }
-  await busy(`Sending ${name}`, async () => {
+  const ok = await busy(`Sending ${name}`, async (): Promise<boolean> => {
     const s = needSession();
     setStatus(`Checking whether ${kind} ${name} exists on the calculator…`);
     const existing = await s.readText(kind, name, 1500);
@@ -182,25 +226,33 @@ export async function sendCurrent(): Promise<void> {
       const extra = existing.formatted ? '\n\nIts rich-text formatting will be replaced by plain text.' : '';
       if (!confirm(`${kind === 'note' ? 'Note' : 'Program'} "${name}" already exists on the calculator. Overwrite it?${extra}`)) {
         setStatus('Send cancelled');
-        return;
+        return false;
       }
     }
     setStatus(`Sending ${name}…`);
     const r = await s.sendText(kind, name, text, app.verifyAfterSend);
-    if (r.refused) return setStatus(`Calculator refused ${name}`, 'error');
+    if (r.refused) {
+      setStatus(`Calculator refused ${name}`, 'error');
+      return false;
+    }
     upsertCalc({ kind, name, text: r.readback ?? text, formatted: false });
     switch (r.verified) {
       case 'match':
-        return setStatus(`Sent ${kind} ${name} (${r.bytes} B) — read-back verified ✓`, 'ok');
+        setStatus(`Sent ${kind} ${name} (${r.bytes} B) — read-back verified ✓`, 'ok');
+        return true;
       case 'mismatch':
         log('warn', `read-back differs:\n${r.readback}`);
-        return setStatus(`Sent ${name}, but the read-back differs (see console)`, 'error');
+        setStatus(`Sent ${name}, but the read-back differs (see console)`, 'error');
+        return false;
       case 'no-reply':
-        return setStatus(`Sent ${name} (${r.bytes} B); read-back got no reply`, 'error');
+        setStatus(`Sent ${name} (${r.bytes} B); read-back got no reply`, 'error');
+        return true;
       default:
-        return setStatus(`Sent ${kind} ${name} (${r.bytes} B)`, 'ok');
+        setStatus(`Sent ${kind} ${name} (${r.bytes} B)`, 'ok');
+        return true;
     }
   });
+  return ok ?? false;
 }
 
 function upsertCalc(obj: CalcObject) {
@@ -268,6 +320,153 @@ export async function syncClock(): Promise<void> {
     if (ok) setStatus(`Clock set to ${when} — check it on the calculator`, 'ok');
     else setStatus(`Clock sent (${when}), but the calculator didn't answer the follow-up ready check`, 'error');
   });
+}
+
+// ------------------------------------------------------ screen + keys
+
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+/** Take one screenshot into `screen.image`. Returns the image, or null on failure. */
+export async function captureScreen(): Promise<RgbaImage | null> {
+  if (!session) return null;
+  try {
+    const shot = await session.screenshot();
+    const img = await decodeScreen(shot, screen.mode);
+    screen.image = img;
+    screen.at = Date.now();
+    screen.error = '';
+    return img;
+  } catch (e) {
+    screen.error = (e as Error).message;
+    log('warn', `screenshot: ${screen.error}`);
+    return null;
+  }
+}
+
+export function setPixelMode(mode: PixelMode): void {
+  screen.mode = mode;
+  saveString('pixelMode', mode);
+  void captureScreen();
+}
+
+let liveLoop: Promise<void> | null = null;
+
+/** Mirror the screen continuously until turned off or disconnected. */
+export function setLive(on: boolean): void {
+  screen.live = on && !!session;
+  if (!screen.live || liveLoop) return;
+  liveLoop = (async () => {
+    let failures = 0;
+    while (screen.live && session) {
+      // Long operations (backup, send) hold the link; don't queue screenshots behind them.
+      if (app.busy) {
+        await sleep(300);
+        continue;
+      }
+      const ok = await captureScreen();
+      failures = ok ? 0 : failures + 1;
+      if (failures >= 3) {
+        screen.live = false;
+        setStatus(`Live screen stopped: ${screen.error}`, 'error');
+        break;
+      }
+      await sleep(250);
+    }
+  })().finally(() => {
+    liveLoop = null;
+  });
+}
+
+let refreshTimer: ReturnType<typeof setTimeout> | undefined;
+
+/** Press keys on the calculator, then refresh the screen view shortly after (unless live). */
+export async function pressKeys(codes: number[]): Promise<void> {
+  if (!session || !codes.length) return;
+  try {
+    await session.pressKeys(codes);
+  } catch (e) {
+    setStatus(`Key press failed: ${(e as Error).message}`, 'error');
+    return;
+  }
+  if (screen.live) return;
+  clearTimeout(refreshTimer);
+  refreshTimer = setTimeout(() => void captureScreen(), 350);
+}
+
+function rememberKeysWork(v: boolean): void {
+  screen.keysWork = v;
+  saveString('keysWork', v ? '1' : '0');
+}
+
+/**
+ * Find out whether key injection works: go Home, screenshot, type "1", screenshot, delete it, and
+ * compare the two screenshots.
+ */
+export async function probeKeys(): Promise<void> {
+  await busy('Testing key injection', async () => {
+    const s = needSession();
+    await s.pressKeys([K.HOME, K.ESC]);
+    await sleep(400);
+    const before = await s.screenshot().then((x) => decodeScreen(x, screen.mode));
+    await s.pressKeys([K.ONE]);
+    await sleep(400);
+    const afterShot = await s.screenshot();
+    const after = await decodeScreen(afterShot, screen.mode);
+    await s.pressKeys([K.DEL]);
+    screen.image = after;
+    screen.at = Date.now();
+    const changed = diffFraction(before, after);
+    log('info', `key probe: ${(changed * 100).toFixed(2)}% of pixels changed after pressing 1`);
+    if (changed > 0.0005) {
+      rememberKeysWork(true);
+      setStatus('Key injection works on this calculator ✓ — Send & Run can start programs', 'ok');
+    } else {
+      rememberKeysWork(false);
+      setStatus("Key injection had no visible effect — Send & Run can't start programs; run them from the Program Catalog", 'error');
+    }
+    setTimeout(() => void captureScreen(), 300);
+  });
+}
+
+/** Send the open program, then start it from the Home view with injected keys and mirror the screen. */
+export async function sendAndRun(): Promise<void> {
+  const file = app.current;
+  if (!file || kindFromFile(file) !== 'program') return setStatus('Open a program to run it', 'error');
+  const text = editorBridge.getText(file);
+  if (text === null) return;
+  const target = runTarget(programNameFromFile(file), text);
+  if (!target) return setStatus('Nothing to run: the program has no EXPORT procedure', 'error');
+  let args = '';
+  if (target.params.length) {
+    const answer = prompt(
+      `${target.name}(${target.params.join(', ')}) takes arguments. Enter them separated by commas (numbers only):`,
+      '',
+    );
+    if (answer === null) return;
+    if (!/^[\d.,\s-]*$/.test(answer)) return setStatus('Arguments can only use digits, ".", "," and "-"', 'error');
+    args = answer;
+  }
+  if (!(await sendCurrent())) return;
+  if (screen.keysWork === false) {
+    setLive(true);
+    return setStatus(
+      `Sent ${target.name}. Key injection didn't work on this calculator, so start it from the Program Catalog (Shift+1)`,
+      'info',
+    );
+  }
+  await busy(`Running ${target.name}`, async () => {
+    const before = await captureScreen();
+    await needSession().pressKeys(keysToRun(target.name, args));
+    await sleep(600);
+    const after = await captureScreen();
+    const call = args ? `${target.name}(${args})` : target.name;
+    if (before && after && diffFraction(before, after) === 0) {
+      setStatus(`Typed ${call} on the Home view, but the screen didn't change. Key injection may not work here; try "Test keys"`, 'error');
+    } else {
+      setStatus(`Started ${call} on the calculator (press On or Esc on the keypad to stop it)`, 'ok');
+    }
+  });
+  setLive(true);
 }
 
 // ---------------------------------------------------------- workspace

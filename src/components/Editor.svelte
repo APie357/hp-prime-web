@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { monaco, PPL } from '../lib/monaco';
   import { kindFromFile } from '../lib/files/workspace';
-  import { app, editorBridge, markDirty, readFile, saveFile, sendCurrent } from '../lib/state.svelte';
+  import { app, editorBridge, markDirty, readFile, saveFile, sendAndRun, sendCurrent } from '../lib/state.svelte';
 
   let host: HTMLDivElement;
   let editor: monaco.editor.IStandaloneCodeEditor | undefined;
@@ -54,6 +54,9 @@
       if (app.current) saveFile(app.current);
     });
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => sendCurrent());
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.Enter, () => {
+      if (app.connected && !app.busy) sendAndRun();
+    });
     // Assignment operators: `:=`, and the calculator's Sto▶ arrow (`value▶var`).
     const typeAction = (id: string, label: string, key: number, text: string) =>
       editor!.addAction({
@@ -101,7 +104,7 @@
     <div class="empty">
       <p>No file open.</p>
       <p class="hint">Create a program or note on the left, or pull one from the calculator.</p>
-      <p class="hint"><kbd>Ctrl</kbd>+<kbd>S</kbd> save · <kbd>Ctrl</kbd>+<kbd>Enter</kbd> send to calculator</p>
+      <p class="hint"><kbd>Ctrl</kbd>+<kbd>S</kbd> save · <kbd>Ctrl</kbd>+<kbd>Enter</kbd> send to calculator · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Enter</kbd> send &amp; run</p>
       <p class="hint"><kbd>Alt</kbd>+<kbd>=</kbd> types <code>:=</code> · <kbd>Alt</kbd>+<kbd>.</kbd> types <code>▶</code> · <kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>F</kbd> format</p>
     </div>
   {/if}

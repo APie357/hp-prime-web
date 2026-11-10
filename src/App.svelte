@@ -3,9 +3,12 @@
   import Editor from './components/Editor.svelte';
   import FileList from './components/FileList.svelte';
   import CalcPanel from './components/CalcPanel.svelte';
+  import ScreenPanel from './components/ScreenPanel.svelte';
   import Console from './components/Console.svelte';
-  import { app, connect, disconnect, initWorkspace, sendCurrent, toggleConsole } from './lib/state.svelte';
-  import { programNameFromFile } from './lib/files/workspace';
+  import { app, connect, disconnect, initWorkspace, sendAndRun, sendCurrent, toggleConsole } from './lib/state.svelte';
+  import { kindFromFile, programNameFromFile } from './lib/files/workspace';
+
+  const isProgram = $derived(!!app.current && kindFromFile(app.current) === 'program');
 
   onMount(() => {
     initWorkspace();
@@ -15,6 +18,9 @@
     if ((e.ctrlKey || e.metaKey) && e.key === '`') {
       e.preventDefault();
       toggleConsole();
+    } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'Enter') {
+      e.preventDefault();
+      if (app.connected && !app.busy) sendAndRun();
     }
   }
 </script>
@@ -40,6 +46,13 @@
     >
       Send {app.current ? programNameFromFile(app.current) : ''} to calculator
     </button>
+    <button
+      onclick={sendAndRun}
+      disabled={!app.connected || !isProgram || !!app.busy}
+      title="Send the program, then start it from the Home view using remote key presses and show the screen live (experimental; Ctrl+Shift+Enter)"
+    >
+      ▶ Send &amp; Run
+    </button>
   </header>
 
   {#if !app.hidSupported}
@@ -52,7 +65,7 @@
   <main>
     <aside class="left"><FileList /></aside>
     <div class="center"><Editor /></div>
-    <aside class="right"><CalcPanel /></aside>
+    <aside class="right"><ScreenPanel /><CalcPanel /></aside>
   </main>
 
   {#if app.showConsole}
@@ -117,7 +130,7 @@
   }
   main {
     display: grid;
-    grid-template-columns: 220px 1fr 280px;
+    grid-template-columns: 220px 1fr 340px;
     min-height: 0;
   }
   .left,
@@ -131,6 +144,8 @@
   }
   .right {
     border-left: 1px solid var(--border);
+    flex-direction: column;
+    overflow-y: auto;
   }
   .center {
     min-width: 0;
