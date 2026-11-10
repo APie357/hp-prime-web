@@ -49,6 +49,9 @@ describe('linter', () => {
     expect(codes('EXPORT F()\nBEGIN\n  RETURN 1\nEND;\n')).toEqual([]);
     // A continued expression is not a new statement.
     expect(codes('EXPORT F()\nBEGIN\n  LOCAL x;\n  x := 1\n    + 2;\nEND;\n')).toEqual([]);
+    // END always needs a semicolon: at the end of the file, before another END, before the next definition.
+    expect(codes('EXPORT F()\nBEGIN\nEND')).toEqual(['missing-semicolon']);
+    expect(codes('EXPORT F()\nBEGIN\n  IF 1 THEN\n    PRINT(1);\n  END\nEND;\n')).toEqual(['missing-semicolon']);
     // END needs a semicolon before the next definition.
     expect(codes('A()\nBEGIN\nEND\nB()\nBEGIN\nEND;\n')).toEqual(['missing-semicolon']);
   });

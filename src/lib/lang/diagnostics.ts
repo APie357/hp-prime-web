@@ -105,6 +105,18 @@ export function lint(src: string): Diagnostic[] {
       brackets.length = 0;
     }
 
+    // Every END must be followed by a semicolon, wherever it appears (including the end of the file).
+    if (t.type === 'kw' && t.upper === 'END' && next?.text !== ';') {
+      out.push({
+        severity: 'error',
+        message: "END must be followed by ';'",
+        line: t.line,
+        col: t.col + t.text.length,
+        endCol: t.col + t.text.length + 1,
+        code: 'missing-semicolon',
+      });
+    }
+
     // Missing semicolon between two statements on different lines.
     if (prev && brackets.length === 0 && t.line > prev.line) {
       const startsStatement =
@@ -115,7 +127,7 @@ export function lint(src: string): Diagnostic[] {
         prev.type === 'str' ||
         prev.type === 'ident' ||
         [')', ']', '}'].includes(prev.text) ||
-        (prev.type === 'kw' && ['END', 'BREAK', 'CONTINUE'].includes(prev.upper));
+        (prev.type === 'kw' && ['BREAK', 'CONTINUE'].includes(prev.upper));
       if (startsStatement && endsOperand) {
         out.push({
           severity: 'warning',

@@ -12,7 +12,7 @@ The user confirmed on 2026-11-09 that connect, send, receive, list, and fetch wo
 - [x] **List programs** (F9 backup): all programs show up, and the end-of-backup frame is detected (not just the quiet timeout)
 - [x] **Fetch** by name round-trips the text exactly (line endings, trailing NUL, non-ASCII characters such as `▶`, `≤`, `π`)
 - [x] Large program (>16 KB): does the G2 accept it? Adjust the size warning
-- [ ] Unplug/replug while connected: the UI recovers cleanly
+- [x] Unplug/replug while connected: the UI recovers cleanly
 - [ ] G1 (`0x1541`), if one is available: same checklist with 64-byte reports
 
 ## 2. Calculator features
