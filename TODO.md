@@ -11,7 +11,7 @@ The user confirmed on 2026-11-09 that connect, send, receive, list, and fetch wo
 - [ ] Check that the overwrite prompt appears for an existing name, and that a missing name costs only about 1.5 s
 - [x] **List programs** (F9 backup): all programs show up, and the end-of-backup frame is detected (not just the quiet timeout)
 - [x] **Fetch** by name round-trips the text exactly (line endings, trailing NUL, non-ASCII characters such as `▶`, `≤`, `π`)
-- [ ] Large program (>16 KB): does the G2 accept it? Adjust the size warning
+- [x] Large program (>16 KB): does the G2 accept it? Adjust the size warning
 - [ ] Unplug/replug while connected: the UI recovers cleanly
 - [ ] G1 (`0x1541`), if one is available: same checklist with 64-byte reports
 
@@ -24,10 +24,10 @@ The user confirmed on 2026-11-09 that connect, send, receive, list, and fetch wo
   - [ ] If keys work: **Send & Run** (Home → type the name with Alpha → Enter) and a live screen view
 - [ ] Delete a program on the calculator (`EB`), with confirmation and verification afterwards
 - [x] Notes (type `0x05`): list, fetch, edit, send (plain text; rich formatting is replaced on upload)
-- [ ] Verify notes on the G2: plain-text upload shows correctly in the Notes app, and the formatting warning appears for rich notes
+- [x] Verify notes on the G2: plain-text upload shows correctly in the Notes app, and the formatting warning appears for rich notes
 - [ ] Optional: preserve rich formatting when the plain text hasn't changed
 - [x] Set the calculator clock (`E7`) — **Sync clock** button
-- [ ] Verify clock sync on the G2 (correct date and time, timezone)
+- [x] Verify clock sync on the G2 (correct date and time, timezone)
 - [ ] Chat send/receive (`F2`)
 - [ ] Full backup to a `.zip`
 - [ ] Auto-reconnect to an already-granted calculator on page load
