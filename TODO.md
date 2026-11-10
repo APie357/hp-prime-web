@@ -34,11 +34,11 @@ The user confirmed on 2026-11-09 that connect, send, receive, list, and fetch wo
 - [ ] V2 negotiated transport (`FF EC …`), only if legacy framing misbehaves on some firmware
 
 ## 3. Editor / language support (paused — resume later)
-- [ ] Command catalog with signatures and docs (seed: hpemu `builtins.rs`, 163 commands)
-- [ ] Completion: keywords, builtins, user procedures/variables
-- [ ] Hover docs and signature help
-- [ ] Snippets: `EXPORT` procedure, `IF/THEN/ELSE/END`, `FOR`, `WHILE`, `REPEAT`, `CASE`
-- [ ] Outline, go-to-definition, folding for `BEGIN…END` and other blocks
+- [x] Command catalog with signatures and docs (`src/lib/lang/catalog.ts`, all 163 commands from hpemu `builtins.rs`; not yet wired into the editor)
+- [x] Completion: keywords, builtins, snippets, and the file's own procedures, globals, parameters and locals
+- [x] Hover docs and signature help (`src/lib/lang/providers.ts`; not yet checked in a browser)
+- [x] Snippets: `EXPORT` procedure, `IF/THEN/ELSE/END`, `FOR`, `WHILE`, `REPEAT`, `CASE`
+- [x] Outline, go-to-definition, folding for `BEGIN…END` and other blocks (`src/lib/lang/symbols.ts`; not yet tried in a browser)
 - [ ] Lint: unbalanced blocks, missing `;`, `=` vs `:=` at statement level
 - [ ] Optional: shortcut for typing `▶` (declined for now)
 - [ ] Optional: formatter

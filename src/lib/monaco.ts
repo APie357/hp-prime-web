@@ -3,6 +3,7 @@ import * as monaco from 'monaco-editor/editor';
 import 'monaco-editor/features/register.all';
 import EditorWorker from 'monaco-editor/editor/editor.worker?worker';
 import { KEYWORDS } from './lang/lexer';
+import { registerPplProviders } from './lang/providers';
 
 self.MonacoEnvironment = {
   getWorker: () => new EditorWorker(),
@@ -61,6 +62,8 @@ monaco.languages.setMonarchTokensProvider(PPL, {
     ],
   },
 });
+
+registerPplProviders(monaco, PPL);
 
 monaco.editor.defineTheme('prime-dark', {
   base: 'vs-dark',
