@@ -1,5 +1,6 @@
 <script lang="ts">
   import Keypad from './Keypad.svelte';
+  import Icon from './Icon.svelte';
   import { keysForKeyboardEvent } from '../lib/hid/keys';
   import type { KeyMode } from '../lib/hid/session';
   import {
@@ -55,10 +56,20 @@
   <header>
     <h2>Screen</h2>
     <span class="spacer"></span>
-    <label class="live" title="Refresh the screenshot continuously">
-      <input type="checkbox" checked={screen.live} disabled={!app.connected} onchange={(e) => setLive(e.currentTarget.checked)} />
-      Live
-    </label>
+    <button
+      class="live"
+      class:on={screen.live}
+      aria-pressed={screen.live}
+      disabled={!app.connected}
+      title={screen.live ? 'Stop the live mirror' : 'Mirror the screen live (refresh continuously)'}
+      onclick={() => setLive(!screen.live)}><Icon name="circle-fill" size={8} />Live</button
+    >
+    <button class="icon" title="Take a screenshot" aria-label="Take a screenshot" disabled={!app.connected} onclick={() => captureScreen()}
+      ><Icon name="photo_camera" size={16} /></button
+    >
+    <button class="icon" title="Save the screenshot as PNG" aria-label="Save the screenshot as PNG" disabled={!screen.image} onclick={savePng}
+      ><Icon name="download" size={16} /></button
+    >
   </header>
 
   <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
@@ -80,15 +91,9 @@
   </div>
   {#if screen.error}<p class="err">{screen.error}</p>{/if}
 
-  <div class="row">
-    <button onclick={() => captureScreen()} disabled={!app.connected}>Screenshot</button>
-    <button onclick={savePng} disabled={!screen.image} title="Save the current screenshot as PNG">Save</button>
-    {#if ui.remoteKeys}
-      <button onclick={toggleKeypad} aria-pressed={screen.showKeypad} class:on={screen.showKeypad}>Keypad</button>
-    {/if}
-  </div>
   {#if ui.remoteKeys}
     <div class="row probe">
+      <button onclick={toggleKeypad} aria-pressed={screen.showKeypad} class:on={screen.showKeypad}>Keypad</button>
       <button
         onclick={probeKeys}
         disabled={!app.connected || !!app.busy}
@@ -123,22 +128,51 @@
     padding-bottom: 6px;
     border-bottom: 1px solid var(--border);
   }
+  /* Same metrics as the Files/Calculator panel headers: 8px padding, 24px buttons. */
   header {
     display: flex;
     align-items: center;
-    padding: 6px 10px;
+    gap: 4px;
+    padding: 8px;
+  }
+  h2 {
+    padding-left: 8px;
+  }
+  header button {
+    box-sizing: border-box;
+    height: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+  }
+  header .icon {
+    width: 24px;
+    padding: 0;
   }
   .spacer {
     flex: 1;
   }
-  .live {
-    font-size: 12px;
-    display: flex;
-    align-items: center;
-    gap: 4px;
+  /* Toggle: the dot turns red while the live mirror runs. */
+  header .live {
+    gap: 5px;
+    padding: 0 8px;
+    color: var(--muted);
+  }
+  .live :global(svg) {
+    color: var(--muted);
+  }
+  header .live.on {
+    color: var(--fg);
+    border-color: var(--accent);
+    background: var(--sel);
+  }
+  .live.on :global(svg) {
+    color: #e5484d;
+    filter: drop-shadow(0 0 3px #e5484d);
   }
   .screen {
-    margin: 0 10px;
+    margin: 0 8px;
     aspect-ratio: 4 / 3;
     background: #000;
     border: 1px solid var(--border);
@@ -163,7 +197,7 @@
   .row {
     display: flex;
     gap: 6px;
-    padding: 6px 10px 0;
+    padding: 6px 8px 0;
     align-items: center;
   }
   .row button {
@@ -192,7 +226,7 @@
     color: var(--err);
   }
   .err {
-    margin: 4px 10px 0;
+    margin: 4px 8px 0;
     font-size: 12px;
     color: var(--err);
   }
