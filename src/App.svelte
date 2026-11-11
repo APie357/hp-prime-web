@@ -162,7 +162,7 @@
   }
   h1 {
     font-size: 15px;
-    margin: 0 14px 0 0;
+    margin: 0 14px 0 6px; /* left edge at 14px, in line with the Files panel's folder and file icons */
     font-weight: 600;
   }
   .dev {
