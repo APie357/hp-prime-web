@@ -169,7 +169,12 @@
         <li>
           <span class="name" title={a.name}>{appDisplayName(a.name)}</span>
           <span class="muted size" title="Based on">{isSystemApp(a.name) ? 'built-in' : a.base}</span>
-          <button onclick={() => openCalcApp(a.name)} title="Copy into the workspace and open">Open</button>
+          <button
+            class="icon-btn"
+            onclick={() => openCalcApp(a.name)}
+            title="Copy into the workspace and open"
+            aria-label="Open app {a.name}"><Icon name="file_open" /></button
+          >
           <button
             class="danger"
             onclick={() => deleteCalcApp(a.name)}
@@ -208,7 +213,12 @@
               <span class="name" title={o.name}>{o.name}</span>
               {#if o.formatted}<span class="muted tag" title="Has rich-text formatting; only the plain text is edited">rich</span>{/if}
               <span class="muted size">{o.text.length} ch</span>
-              <button onclick={() => importObject(o.kind, o.name, o.text)} title="Copy into workspace and open">Open</button>
+              <button
+                class="icon-btn"
+                onclick={() => importObject(o.kind, o.name, o.text)}
+                title="Copy into the workspace and open"
+                aria-label="Open {o.name}"><Icon name="file_open" /></button
+              >
               <button
                 class="danger"
                 onclick={() => deleteCalcObject(o.kind, o.name)}
@@ -239,8 +249,9 @@
     background: var(--sel);
     border-color: var(--accent);
   }
+  /* 16px left lines up with the header title; 8px right with the header's buttons. */
   .pad {
-    padding: 6px 10px;
+    padding: 6px 8px 6px 16px;
     margin: 0;
   }
   .row {
@@ -299,7 +310,7 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 3px 10px;
+    padding: 3px 8px 3px 16px;
     font-size: 13px;
   }
   .name {
@@ -317,6 +328,7 @@
     font-size: 12px;
     padding: 1px 8px;
   }
+  li button.icon-btn,
   li button.danger {
     display: inline-flex;
     align-items: center;
@@ -329,7 +341,7 @@
   }
   .chat-log li {
     align-items: baseline;
-    padding: 1px 10px;
+    padding: 1px 8px 1px 16px;
   }
   .chat-log .who {
     flex: none;
@@ -380,7 +392,7 @@
     color: var(--fg);
   }
   li.group {
-    padding: 0 4px;
+    padding: 0 8px 0 10px;
   }
   li.group .group-toggle {
     flex: 1;
