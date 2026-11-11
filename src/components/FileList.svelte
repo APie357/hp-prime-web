@@ -193,7 +193,7 @@
 
 <style>
   .ws {
-    padding: 6px 10px;
+    padding: 8px;
     border-bottom: 1px solid var(--border);
     display: flex;
     align-items: center;
