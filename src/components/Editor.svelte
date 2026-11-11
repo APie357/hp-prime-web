@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { monaco, monacoTheme, PPL } from '../lib/monaco';
+  import type * as Monaco from 'monaco-editor/editor';
   import { resolvedTheme } from '../lib/ui.svelte';
   import PythonLogo from './PythonLogo.svelte';
   import Icon from './Icon.svelte';
@@ -22,14 +22,19 @@
   } from '../lib/state.svelte';
 
   let host: HTMLDivElement;
-  let editor: monaco.editor.IStandaloneCodeEditor | undefined;
-  const models = new Map<string, monaco.editor.ITextModel>();
+  // Monaco (~3.5 MB) is loaded on mount, after the rest of the UI has rendered.
+  type MonacoModule = typeof import('../lib/monaco');
+  let lib: MonacoModule | undefined;
+  let editor = $state.raw<Monaco.editor.IStandaloneCodeEditor | undefined>();
+  let loadError = $state<string | null>(null);
+  const models = new Map<string, Monaco.editor.ITextModel>();
   const saveTimers = new Map<string, ReturnType<typeof setTimeout>>();
   let loading = false;
 
-  function modelFor(file: string, text: string): monaco.editor.ITextModel {
+  function modelFor(file: string, text: string): Monaco.editor.ITextModel {
     let m = models.get(file);
     if (m) return m;
+    const { monaco, PPL } = lib!;
     const language = languageFor(file) === 'hpppl' ? PPL : languageFor(file);
     m = monaco.editor.createModel(text, language, monaco.Uri.file('/' + file));
     m.onDidChangeContent(() => {
@@ -69,10 +74,10 @@
   };
 
   /** Cursor and scroll position per file, restored when switching tabs. */
-  const viewStates = new Map<string, monaco.editor.ICodeEditorViewState | null>();
+  const viewStates = new Map<string, Monaco.editor.ICodeEditorViewState | null>();
   let shown: string | null = null;
 
-  function show(file: string, m: monaco.editor.ITextModel) {
+  function show(file: string, m: Monaco.editor.ITextModel) {
     if (shown && shown !== file && models.has(shown)) viewStates.set(shown, editor!.saveViewState());
     editor!.setModel(m);
     const v = viewStates.get(file);
@@ -82,14 +87,24 @@
   }
 
   $effect(() => {
-    monaco.editor.setTheme(monacoTheme(resolvedTheme()));
+    const t = resolvedTheme();
+    if (editor && lib) lib.monaco.editor.setTheme(lib.monacoTheme(t));
   });
 
   // Tab drag-and-drop reordering.
   let dragged: string | null = null;
 
-  onMount(() => {
-    editor = monaco.editor.create(host, {
+  let disposed = false;
+  async function init() {
+    try {
+      lib = await import('../lib/monaco');
+    } catch (e) {
+      loadError = e instanceof Error ? e.message : String(e);
+      return;
+    }
+    if (disposed) return;
+    const { monaco, monacoTheme, PPL } = lib;
+    const ed = monaco.editor.create(host, {
       theme: monacoTheme(resolvedTheme()),
       automaticLayout: true,
       fontSize: 14,
@@ -99,16 +114,16 @@
       renderWhitespace: 'selection',
       model: null,
     });
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+    ed.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
       if (app.current) saveFile(app.current);
     });
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => sendCurrent());
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.Enter, () => {
+    ed.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => sendCurrent());
+    ed.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.Enter, () => {
       if (app.connected && !app.busy) sendAndRun();
     });
     // Assignment operators: `:=`, and the calculator's Sto▶ arrow (`value▶var`).
     const typeAction = (id: string, label: string, key: number, text: string) =>
-      editor!.addAction({
+      ed.addAction({
         id,
         label,
         keybindings: [key],
@@ -118,7 +133,13 @@
       });
     typeAction('ppl.insertAssign', 'PPL: Insert := (assign)', monaco.KeyMod.Alt | monaco.KeyCode.Equal, ':=');
     typeAction('ppl.insertStore', 'PPL: Insert ▶ (store)', monaco.KeyMod.Alt | monaco.KeyCode.Period, '▶');
+    editor = ed; // triggers the theme and model effects
+  }
+
+  onMount(() => {
+    init();
     return () => {
+      disposed = true;
       editor?.dispose();
       for (const m of models.values()) m.dispose();
     };
@@ -212,6 +233,10 @@
       <p class="hint">Create a program or note on the left, or pull one from the calculator.</p>
       <p class="hint"><kbd>Ctrl</kbd>+<kbd>S</kbd> save · <kbd>Ctrl</kbd>+<kbd>Enter</kbd> send to calculator · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Enter</kbd> send &amp; run</p>
       <p class="hint"><kbd>Alt</kbd>+<kbd>=</kbd> types <code>:=</code> · <kbd>Alt</kbd>+<kbd>.</kbd> types <code>▶</code> · <kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>F</kbd> format</p>
+    </div>
+  {:else if !editor}
+    <div class="empty">
+      <p class="hint">{loadError ? `Editor failed to load: ${loadError}` : 'Loading editor…'}</p>
     </div>
   {/if}
   <div class="editor" bind:this={host}></div>

@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { monaco, monacoTheme } from '../lib/monaco';
   import { resolvedTheme } from '../lib/ui.svelte';
   import { closeDiff, type DiffRequest } from '../lib/state.svelte';
 
@@ -12,6 +11,20 @@
 
   onMount(() => {
     dialog.showModal();
+    // Monaco is a lazy chunk (see Editor.svelte); usually already loaded by the editor.
+    let cleanup: (() => void) | undefined;
+    let closed = false;
+    import('../lib/monaco').then(({ monaco, monacoTheme }) => {
+      if (closed) return;
+      cleanup = mount(monaco, monacoTheme);
+    });
+    return () => {
+      closed = true;
+      cleanup?.();
+    };
+  });
+
+  function mount(monaco: typeof import('../lib/monaco').monaco, monacoTheme: typeof import('../lib/monaco').monacoTheme) {
     const original = monaco.editor.createModel(req.original, req.language);
     const modified = monaco.editor.createModel(req.modified, req.language);
     const diff = monaco.editor.createDiffEditor(host, {
@@ -35,7 +48,7 @@
       original.dispose();
       modified.dispose();
     };
-  });
+  }
 </script>
 
 <dialog

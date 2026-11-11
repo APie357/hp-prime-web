@@ -1,6 +1,6 @@
 /** Monaco bootstrap: core editor + contributions, one worker, PPL language. */
 import * as monaco from 'monaco-editor/editor';
-import 'monaco-editor/features/register.all';
+import './monaco-features';
 // Python syntax for .py files inside app folders (loaded on first use).
 import 'monaco-editor/languages/definitions/python/register';
 import EditorWorker from 'monaco-editor/editor/editor.worker?worker';
