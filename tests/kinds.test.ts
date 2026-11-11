@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decodeTextFor, encodeTextFor, fileType, languageFor, programNameFromFile } from '../src/lib/files/kinds';
+import { decodeTextFor, encodeTextFor, fileType, languageFor, parseNewName, programNameFromFile } from '../src/lib/files/kinds';
 
 describe('workspace file kinds', () => {
   it('classifies top-level and app files', () => {
@@ -22,5 +22,19 @@ describe('workspace file kinds', () => {
     expect(new TextDecoder().decode(py)).toBe('print("π")');
     expect(decodeTextFor('A.hpappdir/a.py', py)).toBe('print("π")');
     expect(() => decodeTextFor('A.hpappdir/A.hpappprgm', Uint8Array.of(0, 0, 0x66, 0xf3, 0, 0, 1, 0))).toThrow(/compiled/);
+  });
+});
+
+describe('parseNewName', () => {
+  it('infers the kind from a known extension', () => {
+    expect(parseNewName('GAME.hpppl')).toEqual({ name: 'GAME', kind: 'program' });
+    expect(parseNewName(' Foo.HPPRGM ')).toEqual({ name: 'Foo', kind: 'program' });
+    expect(parseNewName('My list.note')).toEqual({ name: 'My list', kind: 'note' });
+    expect(parseNewName('Quiz.hpappdir')).toEqual({ name: 'Quiz', kind: 'app' });
+    expect(parseNewName('Quiz.hpapp')).toEqual({ name: 'Quiz', kind: 'app' });
+  });
+  it('leaves other names alone', () => {
+    expect(parseNewName('NEWPROG')).toEqual({ name: 'NEWPROG', kind: null });
+    expect(parseNewName('v1.2')).toEqual({ name: 'v1.2', kind: null });
   });
 });

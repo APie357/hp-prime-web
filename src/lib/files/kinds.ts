@@ -91,3 +91,24 @@ export function decodeTextFor(path: string, bytes: Uint8Array): string {
       return new TextDecoder().decode(bytes).replace(/^﻿/, '');
   }
 }
+
+/** What the "New…" dialog creates. */
+export type NewKind = FileKind | 'app';
+
+const NEW_EXT: [RegExp, NewKind][] = [
+  [/\.(hpppl|ppl|hpprgm|prgm|txt)$/i, 'program'],
+  [/\.(note|hpnote)$/i, 'note'],
+  [/\.(hpappdir|hpapp|app)$/i, 'app'],
+];
+
+/**
+ * Split what was typed in the "New…" dialog into a name and, when it ends in a known extension
+ * (`Foo.note`, `GAME.hpppl`, `Quiz.hpapp`…), the kind that extension means. Other text is the name as-is.
+ */
+export function parseNewName(input: string): { name: string; kind: NewKind | null } {
+  const s = input.trim();
+  for (const [re, kind] of NEW_EXT) {
+    if (re.test(s)) return { name: s.replace(re, '').trim(), kind };
+  }
+  return { name: s, kind: null };
+}

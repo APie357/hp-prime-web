@@ -1,5 +1,6 @@
 /** Application state and actions shared by the components. */
 import { log } from './hid/log';
+import { askConfirm, askText } from './dialogs.svelte';
 import { decodeText, isValidName, KEY_MODES, KIND_TYPE, PrimeSession, type KeyMode, type TextKind } from './hid/session';
 import type { PrimeFile } from './hid/parsers';
 import { backupFileName, buildBackupZip, readBackupZip } from './files/backup';
@@ -90,8 +91,12 @@ export const app = $state({
   helpPending: false,
   /** Apps on the calculator, from the last listing. */
   calcApps: [] as CalcApp[],
+  /** "New…" dialog (program, note or app) is open. */
+  newFileOpen: false,
   /** "New app" dialog is open. */
   newAppOpen: false,
+  /** Name to start the "New app" dialog with (handed over from the "New…" dialog). */
+  newAppName: '',
   /** Files open in editor tabs, in tab order. */
   openFiles: [] as string[],
   /** Side-by-side comparison waiting for the user (see `showDiff`). */
@@ -356,7 +361,11 @@ export async function sendCurrent(): Promise<boolean> {
     const existing = await s.readText(kind, name, 1500);
     if (existing) {
       const extra = existing.formatted ? '\n\nIts rich-text formatting will be replaced by plain text.' : '';
-      if (!confirm(`${kind === 'note' ? 'Note' : 'Program'} "${name}" already exists on the calculator. Overwrite it?${extra}`)) {
+      const overwrite = await askConfirm(
+        `${kind === 'note' ? 'Note' : 'Program'} "${name}" already exists on the calculator. Overwrite it?${extra}`,
+        { title: 'Overwrite on the calculator?', okLabel: 'Overwrite', danger: true },
+      );
+      if (!overwrite) {
         setStatus('Send canceled');
         return false;
       }
@@ -491,7 +500,12 @@ export async function syncClock(): Promise<void> {
 /** Delete a program or note on the calculator, after confirmation, and check that it's gone. */
 export async function deleteCalcObject(kind: TextKind, name: string): Promise<void> {
   const what = `${kind} "${name}"`;
-  if (!confirm(`Delete ${what} from the calculator? This can't be undone (your workspace copy, if any, is kept).`)) return;
+  const ok = await askConfirm(`Delete ${what} from the calculator? This can't be undone (your workspace copy, if any, is kept).`, {
+    title: 'Delete from the calculator?',
+    okLabel: 'Delete',
+    danger: true,
+  });
+  if (!ok) return;
   await busy(`Deleting ${name}`, async () => {
     const r = await needSession().deleteObject(KIND_TYPE[kind], name);
     if (r.refused) return setStatus(`The calculator refused to delete ${what}`, 'error');
@@ -531,11 +545,12 @@ export async function restoreFromZip(zipFile: File): Promise<void> {
   if (!items.length) return setStatus('The backup has no programs or notes to restore', 'error');
   const list = items.map((x) => `${x.kind} ${x.f.name}`).join(', ');
   if (
-    !confirm(
+    !(await askConfirm(
       `Restore ${items.length} object(s) from ${zipFile.name} (made ${new Date(parsed.manifest.createdAt).toLocaleString()})?\n\n` +
         `${list}\n\nObjects with the same name on the calculator are overwritten. ` +
         `Notes are restored as plain text.${skipped ? ` ${skipped} other object(s) (apps, variables, settings) are skipped.` : ''}`,
-    )
+      { title: 'Restore backup?', okLabel: 'Restore', danger: true },
+    ))
   )
     return;
   await busy('Restoring', async () => {
@@ -710,12 +725,17 @@ export async function sendAndRun(): Promise<void> {
   if (!target) return setStatus('Nothing to run: the program has no EXPORT procedure', 'error');
   let args = '';
   if (target.params.length) {
-    const answer = prompt(
+    const answer = await askText(
       `${target.name}(${target.params.join(', ')}) takes arguments. Enter them separated by commas (numbers only):`,
       '',
+      {
+        title: 'Run with arguments',
+        okLabel: 'Send & Run',
+        placeholder: target.params.join(', '),
+        validate: (v) => (/^[\d.,\s-]*$/.test(v) ? null : 'Use only digits, ".", "," and "-"'),
+      },
     );
     if (answer === null) return;
-    if (!/^[\d.,\s-]*$/.test(answer)) return setStatus('Arguments can only use digits, ".", "," and "-"', 'error');
     args = answer;
   }
   if (!(await sendCurrent())) return;
@@ -781,7 +801,11 @@ export async function saveAppToWorkspace(name: string, payload: Uint8Array): Pro
     } catch {
       /* unreadable local copy: offer to replace it */
     }
-    if (!confirm(`App "${appDisplayName(name)}" already exists in the workspace and differs. Replace it with the calculator's version?`)) {
+    const replace = await askConfirm(
+      `App "${appDisplayName(name)}" already exists in the workspace and differs. Replace it with the calculator's version?`,
+      { title: 'Replace workspace app?', okLabel: 'Replace', danger: true },
+    );
+    if (!replace) {
       return false;
     }
     for (const f of existing) {
@@ -849,7 +873,7 @@ export async function sendAppFolder(name: string): Promise<boolean> {
       const what = isSystemApp(name)
         ? `This replaces the built-in ${appDisplayName(name)} app's settings and program on the calculator.`
         : `App "${name}" already exists on the calculator.`;
-      if (!confirm(`${what} Overwrite it?`)) {
+      if (!(await askConfirm(`${what} Overwrite it?`, { title: 'Overwrite on the calculator?', okLabel: 'Overwrite', danger: true }))) {
         setStatus('Send canceled');
         return false;
       }
@@ -922,7 +946,12 @@ export async function openCalcApp(name: string): Promise<void> {
 /** Delete a custom app from the calculator (built-in apps can only be reset on the calculator). */
 export async function deleteCalcApp(name: string): Promise<void> {
   if (isSystemApp(name)) return setStatus('Built-in apps can’t be deleted (reset them on the calculator instead)', 'error');
-  if (!confirm(`Delete app "${name}" from the calculator? This can't be undone (your workspace copy, if any, is kept).`)) return;
+  const ok = await askConfirm(`Delete app "${name}" from the calculator? This can't be undone (your workspace copy, if any, is kept).`, {
+    title: 'Delete from the calculator?',
+    okLabel: 'Delete',
+    danger: true,
+  });
+  if (!ok) return;
   await busy(`Deleting app ${name}`, async () => {
     const r = await needSession().deleteObject(ObjType.APP, name);
     if (r.refused) return setStatus(`The calculator refused to delete app "${name}"`, 'error');
@@ -934,7 +963,11 @@ export async function deleteCalcApp(name: string): Promise<void> {
 
 /** Delete an app folder from the workspace. */
 export async function deleteAppFolder(name: string): Promise<void> {
-  if (!confirm(`Delete app ${appDisplayName(name)} (${appDirName(name)}) from ${app.workspaceLabel}? (The calculator copy is not affected.)`)) return;
+  const ok = await askConfirm(
+    `Delete app ${appDisplayName(name)} (${appDirName(name)}) from ${app.workspaceLabel}? (The calculator copy is not affected.)`,
+    { title: 'Delete app folder?', okLabel: 'Delete', danger: true },
+  );
+  if (!ok) return;
   const files = appFilesOf(name);
   await (await ensureWorkspace()).removeDir(appDirName(name));
   for (const f of files) {
@@ -949,7 +982,11 @@ export async function deleteAppFolder(name: string): Promise<void> {
 /** Rename an app: the folder and its own three files. */
 export async function renameApp(name: string): Promise<void> {
   if (isSystemApp(name)) return setStatus('Built-in apps keep their names', 'error');
-  const to = prompt(`Rename app ${name} to:`, name)?.trim();
+  const to = await askText(`New name for app ${name}:`, name, {
+    title: 'Rename app',
+    okLabel: 'Rename',
+    validate: (v) => (isValidAppName(v) ? null : 'Up to 40 characters, no \\ / : * ? " < > | and no leading &'),
+  });
   if (!to || to === name) return;
   if (!isValidAppName(to)) return setStatus(`"${to}" is not a valid app name`, 'error');
   const ws = await ensureWorkspace();
@@ -981,7 +1018,7 @@ const SAFE_FILE_NAME = /^[^\\/:*?"<>|\x00-\x1f]{1,64}$/;
 async function renameAppExtraFile(appName: string, file: string): Promise<void> {
   const dir = appDirName(appName);
   const oldInner = file.slice(dir.length + 1);
-  const inner = prompt(`Rename ${oldInner} to:`, oldInner)?.trim();
+  const inner = await askText(`New name for ${oldInner}:`, oldInner, { title: 'Rename file', okLabel: 'Rename' });
   if (!inner || inner === oldInner) return;
   if (!SAFE_FILE_NAME.test(inner) || isAppOwnFile(appName, `${dir}/${inner}`)) {
     return setStatus(`"${inner}" can't be used as a file name here`, 'error');
@@ -1001,7 +1038,10 @@ async function renameAppExtraFile(appName: string, file: string): Promise<void> 
 
 /** Add a new text file (e.g. a Python module) to an app folder. */
 export async function addAppFile(appName: string): Promise<void> {
-  const inner = prompt('New file name (e.g. module.py):', 'module.py')?.trim();
+  const inner = await askText(`File name in ${appDisplayName(appName)} (e.g. module.py):`, 'module.py', {
+    title: 'Add file',
+    okLabel: 'Add',
+  });
   if (!inner) return;
   const dir = appDirName(appName);
   if (!SAFE_FILE_NAME.test(inner) || isAppOwnFile(appName, `${dir}/${inner}`)) {
@@ -1162,7 +1202,12 @@ async function promptIncoming(): Promise<void> {
     return;
   }
   const list = useful.map((f) => `• ${describe(f)}`).join('\n');
-  if (!confirm(`The calculator sent:\n${list}${skipped ? `\n(+ ${skipped} other object(s), skipped)` : ''}\n\nSave to the workspace?`)) {
+  const save = await askConfirm(`${list}${skipped ? `\n(+ ${skipped} other object(s), skipped)` : ''}\n\nSave to the workspace?`, {
+    title: 'The calculator sent',
+    okLabel: 'Save',
+    cancelLabel: 'Ignore',
+  });
+  if (!save) {
     setStatus('Ignored what the calculator sent');
     return;
   }
@@ -1259,21 +1304,24 @@ export async function readFile(file: string): Promise<string> {
   return text;
 }
 
-export async function newFile(kind: TextKind = 'program'): Promise<void> {
-  const name = prompt(
-    kind === 'program' ? 'Program name (letters, digits, _):' : 'Note name:',
-    kind === 'program' ? 'NEWPROG' : 'New note',
-  );
-  if (!name) return;
-  if (!isValidName(kind, name)) return setStatus(`"${name}" is not a valid ${kind} name`, 'error');
+/** Create a program or note in the workspace and open it. Resolves false (with a status) if it can't. */
+export async function newFile(kind: TextKind, name: string): Promise<boolean> {
+  if (!isValidName(kind, name)) {
+    setStatus(`"${name}" is not a valid ${kind} name`, 'error');
+    return false;
+  }
   const ws = await ensureWorkspace();
   const file = fileFor(kind, name);
-  if (await ws.exists(file)) return setStatus(`${file} already exists`, 'error');
+  if (await ws.exists(file)) {
+    setStatus(`${file} already exists`, 'error');
+    return false;
+  }
   const template =
     kind === 'program' ? `EXPORT ${name}()\nBEGIN\n  PRINT();\n  PRINT("Hello from ${name}");\nEND;\n` : '';
   await writeTracked(file, template);
   await refreshFiles();
   openFile(file);
+  return true;
 }
 
 export async function deleteFile(file: string): Promise<void> {
@@ -1281,7 +1329,12 @@ export async function deleteFile(file: string): Promise<void> {
   if (appName && isAppOwnFile(appName, file)) {
     return setStatus(`${file} is part of the app; delete the whole app instead`, 'error');
   }
-  if (!confirm(`Delete ${file} from ${app.workspaceLabel}? (The calculator copy is not affected.)`)) return;
+  const ok = await askConfirm(`Delete ${file} from ${app.workspaceLabel}? (The calculator copy is not affected.)`, {
+    title: 'Delete file?',
+    okLabel: 'Delete',
+    danger: true,
+  });
+  if (!ok) return;
   await (await ensureWorkspace()).remove(file);
   dropTab(file);
   editorBridge.forget(file);
@@ -1300,7 +1353,11 @@ export async function renameFile(file: string): Promise<void> {
   const kind = kindFromFile(file);
   const ext = file.slice(programNameFromFile(file).length);
   const oldName = programNameFromFile(file);
-  const name = prompt(`Rename ${file} to:`, oldName)?.trim();
+  const name = await askText(`New name for ${file}:`, oldName, {
+    title: `Rename ${kind}`,
+    okLabel: 'Rename',
+    validate: (v) => (isValidName(kind, v) ? null : `Not a valid ${kind} name`),
+  });
   if (!name || name === oldName) return;
   if (!isValidName(kind, name)) return setStatus(`"${name}" is not a valid ${kind} name`, 'error');
   const to = name + ext;

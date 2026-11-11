@@ -32,7 +32,8 @@
   onDestroy(() => iconUrl && URL.revokeObjectURL(iconUrl));
 
   let dialog: HTMLDialogElement;
-  let name = $state('');
+  let name = $state(app.newAppName);
+  app.newAppName = '';
   let bases = $state<AppBase[] | null>(null);
   let chosen = $state(0);
   let lang = $state<AppLanguage>('ppl');

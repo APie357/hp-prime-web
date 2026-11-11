@@ -7,7 +7,6 @@
     app,
     deleteAppFolder,
     deleteFile,
-    newFile,
     openFile,
     renameApp,
     renameFile,
@@ -97,16 +96,15 @@
   <header>
     <h2>Files</h2>
     <div class="actions">
-      <button title="New program" onclick={() => newFile('program')}><Icon name="add" size={15} />Prgm</button>
-      <button title="New note" onclick={() => newFile('note')}><Icon name="add" size={15} />Note</button>
-      <button title="New app (based on a calculator app; experimental)" onclick={() => (app.newAppOpen = true)}
-        ><Icon name="add" size={15} />App</button
-      >
+      <button title="New program, note or app" onclick={() => (app.newFileOpen = true)}><Icon name="add" size={15} />New</button>
       <button class="only-icon" title="Refresh" aria-label="Refresh" onclick={refreshFiles}><Icon name="refresh" size={16} /></button>
     </div>
   </header>
 
   <div class="ws">
+    {#if folderAccessSupported()}
+      <button class="ws-open" title="Open a local folder as the workspace" onclick={openFolder}><Icon name="folder" size={15} />Open</button>
+    {/if}
     {#if app.needsPermission}
       <button class="wide" onclick={reopenFolder}>Reopen “{app.workspaceLabel}”</button>
     {:else if app.workspaceLabel}
@@ -115,14 +113,11 @@
         <span class="ws-name">{app.workspaceLabel}</span>
       </span>
     {/if}
-    <div class="ws-buttons">
-      {#if folderAccessSupported()}
-        <button onclick={openFolder}>Open folder…</button>
-      {/if}
-      {#if app.workspaceKind !== 'browser'}
-        <button onclick={openBrowserStorage}>Use browser storage</button>
-      {/if}
-    </div>
+    {#if app.workspaceKind !== 'browser'}
+      <button class="only-icon" title="Use browser storage" aria-label="Use browser storage" onclick={openBrowserStorage}
+        ><Icon name="database" size={15} /></button
+      >
+    {/if}
   </div>
 
   <ul>
@@ -201,10 +196,23 @@
     padding: 6px 8px;
     border-bottom: 1px solid var(--border);
     display: flex;
-    flex-direction: column;
-    gap: 6px;
+    align-items: center;
+    gap: 8px;
+  }
+  .ws-open,
+  .ws .only-icon {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 12px;
+  }
+  .ws .only-icon {
+    margin-left: auto;
+    padding: 2px 4px;
   }
   .ws-label {
+    min-width: 0;
     display: flex;
     align-items: center;
     gap: 5px;
@@ -226,12 +234,6 @@
   .actions .only-icon {
     padding: 2px 4px;
   }
-  .ws-buttons {
-    display: flex;
-    gap: 4px;
-    flex-wrap: wrap;
-  }
-  .ws-buttons button,
   .wide {
     font-size: 12px;
   }
@@ -245,6 +247,8 @@
   li {
     display: flex;
     align-items: center;
+    margin: 0 4px;
+    border-radius: 4px;
   }
   li.active {
     background: var(--sel);

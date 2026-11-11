@@ -2,6 +2,7 @@
   import { clearLog, log, logEntries, logPackets } from '../lib/hid/log';
   import { hex, parseHex } from '../lib/hid/bytes';
   import { app, sendRaw, setPadReports } from '../lib/state.svelte';
+  import { showAlert } from '../lib/dialogs.svelte';
 
   let box: HTMLDivElement;
   let rawHex = $state('FF');
@@ -18,7 +19,7 @@
       const r = await sendRaw(parseHex(rawHex), expectReply);
       if (expectReply && r !== undefined) log('info', r ? `reply (${r.length} B): ${hex(r, 256)}` : 'no reply');
     } catch (err) {
-      alert((err as Error).message);
+      void showAlert((err as Error).message, { title: "Couldn't send" });
     }
   }
 

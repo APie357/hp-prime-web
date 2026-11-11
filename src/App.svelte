@@ -8,6 +8,9 @@
   import Splitter from './components/Splitter.svelte';
   import DiffView from './components/DiffView.svelte';
   import NewAppDialog from './components/NewAppDialog.svelte';
+  import NewFileDialog from './components/NewFileDialog.svelte';
+  import Dialogs from './components/Dialogs.svelte';
+  import { dialogs } from './lib/dialogs.svelte';
   import Icon from './components/Icon.svelte';
   import { appDisplayName, appOfPath } from './lib/files/app';
   import { fileType } from './lib/files/kinds';
@@ -115,7 +118,9 @@
     </div>
   {/if}
 
+  {#if app.newFileOpen}<NewFileDialog />{/if}
   {#if app.newAppOpen}<NewAppDialog />{/if}
+  {#if dialogs.current}{#key dialogs.current}<Dialogs req={dialogs.current} />{/key}{/if}
 
   {#if app.diff}
     {#key app.diff}<DiffView req={app.diff} />{/key}
