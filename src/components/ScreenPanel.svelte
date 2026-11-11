@@ -164,12 +164,11 @@
   }
   header .live.on {
     color: var(--fg);
-    border-color: var(--accent);
+    border-color: #e5484d;
     background: var(--sel);
   }
   .live.on :global(svg) {
     color: #e5484d;
-    filter: drop-shadow(0 0 3px #e5484d);
   }
   .screen {
     margin: 0 8px;
