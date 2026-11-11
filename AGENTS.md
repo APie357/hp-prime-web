@@ -16,7 +16,8 @@ The goal is a browser IDE for writing HP Prime PPL ("HP Basic") programs and sen
 - **More calculator features (2026-11-10, untested on hardware):** **Delete** (✕ per object in the Calculator panel) sends `EB`, treats an F9 reply as a refusal, and confirms with an F8 probe. **Backup to .zip** (`src/lib/files/backup.ts`) stores every F9 object raw plus readable programs/notes and a `manifest.json`. **Restore…** sends only the programs and notes from such a zip through `sendText` (with read-back). **Chat** (verified on the G2): `F2` sends a message, and the calculator's replies come in unprompted as `F2 01 len(u32BE) text(UTF-16LE) 00 00` (any text or equation). The Messages app's **Help** softkey sends an empty message (`len 2`, body `00 00`), identical on every press, and the UI shows it as a help request. It only sets the Help• flag; **sending the same empty chat back (`F2 01 00 00 00 02 00 00`) clears it** (verified on the G2), which is what the ✋ Clear help button does. Receiving works in the web UI, including while the live screen mirror is running (G2, 2026-11-10). Bytes after `len` are stale buffer contents, so ignore them. `PrimeSession.listen()` reads the link while idle to catch them (it yields to operations through `ReportPort.cancelRead`), and `recvMessage` also passes along a chat that arrives ahead of a reply. **Delete is verified on the G2: `EB` gets no reply.** The app **auto-reconnects** to a granted calculator on load and on the HID `connect` event.
 - **Apps (2026-11-10):** `src/lib/files/app.ts` parses and builds the type-02 body. It is a series of u32BE-length sections: bag (`.hpapp`, byte 20 = base app), Info note, program (UTF-16LE + NUL), then extra files (name UTF-16 + `00 00` + data). It round-trips every app in the user's G2 backup. The workspace stores apps as `<Name>.hpappdir/` (`Workspace` handles one level of subfolders and binary files; `src/lib/files/kinds.ts` decides type and encoding per path). The calculator's Send key pushes unsolicited `F7`s; `PrimeSession.onObject` gets them and state asks before saving. Sending apps, creating apps and F8 for apps are **untested on hardware**. Running apps is deferred.
 - **Exam-mode configurations (2026-11-11, receiving verified on the G2; sending untested):** behind **Settings → Calculator → Exam mode configurations** (off). Type `0B` objects from the F9 listing appear in the Calculator panel (open, delete; `Default Exam` can't be deleted). They save as top-level `<Name>.hpexammode` files (raw bytes, the Connectivity Kit's extension) and open in `ExamEditor.svelte` (a form, not Monaco). Send = `sendExamFile` (overwrite check, `sendObject` + read-back); the stored name is set to the file name first. The calculator's Send key pushes them too. The format (`src/lib/files/exam.ts`, `docs/formats/exam-mode.md`) was mapped from 12 single-change configurations made on the G2 (2026-11-11): name, timeout, option flags (memory, angle, LED/security code), CAS (0x040 bit 7) and a linear CRC-32 at 0x41C that `updateChecksum` keeps exact on every edit (it reproduces the calculator's values). The password hash (0x440, 64 B) depends only on the password and can't be computed, only copied from another configuration. Other disabled features are raw bits until mapped (`EXAM_FEATURES`). Open: whether the CRC covers the name; sending configurations to the calculator; renamed configurations not showing up (TODO §2). Setting a password needs the hash algorithm (probably keyed; TODO §2).
-- **Next:** hardware checks (backup/restore, auto-reconnect); why Send & Run works while single keys don't (TODO §1, plus screen colors and `EC` on the G2) → `.hpprgm` import/export → language-feature browser check.
+- **`.hpprgm` (2026-11-11, untested with real Connectivity Kit files):** Files header → Import .hpprgm (G2 or G1 → `<name>.hpppl`, with the usual diff when a local copy differs); a program row's export button downloads a G2 `.hpprgm` (`src/lib/files/hpprgm.ts`, layout from Insoft's Xprime, `docs/formats/hpprgm.md`).
+- **Next:** hardware checks (backup/restore, auto-reconnect); why Send & Run works while single keys don't (TODO §1, plus screen colors and `EC` on the G2) → language-feature browser check.
 
 ## Conventions
 - Repo: https://github.com/APie357/hp-prime-web (public). Every push to `main` runs `.github/workflows/pages.yml` (test → build → deploy) to https://apie357.github.io/hp-prime-web/. Vite's `base` is `/hp-prime-web/` in production builds.
@@ -28,7 +29,7 @@ The goal is a browser IDE for writing HP Prime PPL ("HP Basic") programs and sen
 - Commit messages end with the Co-Authored-By line given by the harness.
 
 ## Protocol findings (from hplp + modern reverse-engineering)
-The full write-up, marked by how sure each fact is, is **`docs/PROTOCOL.md`**; each object type's body format has its own file in **`docs/formats/`** (program, note, app, exam-mode). Keep them in step with any new finding. The notes below are the working summary.
+The full write-up, marked by how sure each fact is, is **`docs/PROTOCOL.md`**; each object type's body format has its own file in **`docs/formats/`** (program, note, app, exam-mode, plus `.hpprgm` files). Keep them in step with any new finding. The notes below are the working summary.
 
 Sources: `debrouxl/hplp` (`libhpcalcs/src/prime_vpkt.c`, `prime_cmd.c`, `hplibs.h`); `56phil/prime_connection_kit` (MIT; **verified on a G2, firmware V2.060.650**); `golba98/hp-prime-emulator` (MIT; G1 2.2.15157 docs); `BeatSkip/PrimeDev` (a Blazor WebHID app for the G2, with the V2 framing).
 
@@ -49,7 +50,7 @@ Sources: `debrouxl/hplp` (`libhpcalcs/src/prime_vpkt.c`, `prime_cmd.c`, `hplibs.
 AGENTS.md                      plan + protocol notes + conventions (kept current)
 TODO.md                        task list: hardware checks, features, bugs
 docs/PROTOCOL.md               HP Prime G2 USB protocol reference (verified vs reference vs unknown)
-docs/formats/                  object body formats: program.md, note.md, app.md, exam-mode.md
+docs/formats/                  object body formats: program.md, note.md, app.md, exam-mode.md; hpprgm.md (CK files)
 package.json, vite.config.ts, tsconfig*.json, svelte.config.js
 udev/60-hp-prime.rules         hidraw access on Linux (TAG+="uaccess" for 03f0:0441/1541/2441)
 THIRD_PARTY.md                 attribution (hplp GPL ref-only, pck/hpemu MIT, PrimeDev keycodes)
@@ -84,6 +85,7 @@ src/
     note.ts        note (type 05) codec: plain text + rich-text section
     app.ts         app (type 02) body codec + .hpappdir layout, base apps, new-app starters
     icon.ts        app icon.png (38×38, center-cropped)
+    hpprgm.ts      Connectivity Kit .hpprgm read (G2/G1) and write (G2); file-only, never sent
     exam.ts        exam-mode configuration (type 0B) codec: name, timeout, options, CAS, CRC-32, password copy
     backup.ts      full-backup .zip (manifest + raw objects + readable programs/notes) build/read
   lib/lang/

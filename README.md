@@ -16,6 +16,7 @@ HP Prime calculator over USB, using WebHID.
 ## Features
 - Monaco editor with PPL highlighting, completion, hover, signature help, outline, lint and a formatter;
   Python support for app modules.
+- Import and export Connectivity Kit `.hpprgm` program files.
 - Files stored in a local folder (File System Access API) or in browser storage, with tabs and autosave.
 - Send the open program, note or app to the calculator, with an overwrite check and read-back verification.
 - List the apps, programs and notes on the calculator, open them in the editor, or delete them.

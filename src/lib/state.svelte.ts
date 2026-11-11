@@ -10,7 +10,8 @@ import type { DeviceInfo } from './hid/parsers';
 import { ObjType } from './hid/commands';
 import { K, keysToRun } from './hid/keys';
 import { decodeScreen, diffFraction, type PixelMode, type RgbaImage } from './screen';
-import { runTarget } from './lang/symbols';
+import { analyze, runTarget } from './lang/symbols';
+import { decodeHpprgm, encodeHpprgm } from './files/hpprgm';
 import {
   appDirName,
   appDisplayName,
@@ -482,23 +483,23 @@ export async function fetchObject(kind: TextKind, name: string): Promise<void> {
 }
 
 /** Put a calculator program or note into the workspace and open it. */
-export async function importObject(kind: TextKind, name: string, text: string): Promise<void> {
+export async function importObject(kind: TextKind, name: string, text: string, from = 'Calculator'): Promise<void> {
   const ws = await ensureWorkspace();
   const file = fileFor(kind, name);
   if (await ws.exists(file)) {
     const local = app.current === file ? editorBridge.getText(file) : await ws.read(file);
     if (local !== null && local.replace(/\r\n?/g, '\n') !== text.replace(/\r\n?/g, '\n')) {
       const choice = await showDiff({
-        title: `${file} differs from the calculator's copy`,
-        message: 'Left: your local file. Right: the calculator.',
+        title: `${file} differs from the ${from === 'Calculator' ? "calculator's copy" : from}`,
+        message: `Left: your local file. Right: ${from === 'Calculator' ? 'the calculator' : from}.`,
         original: local,
         modified: text,
         originalLabel: 'Local',
-        modifiedLabel: 'Calculator',
+        modifiedLabel: from,
         language: langFor(file),
         actions: [
           { id: 'keep', label: 'Keep local' },
-          { id: 'replace', label: "Use calculator's version", primary: true },
+          { id: 'replace', label: from === 'Calculator' ? "Use calculator's version" : `Use ${from}`, primary: true },
         ],
       });
       if (choice !== 'replace') {
@@ -511,6 +512,56 @@ export async function importObject(kind: TextKind, name: string, text: string): 
   editorBridge.setText(file, text);
   await refreshFiles();
   openFile(file);
+}
+
+// ------------------------------------------------------------- .hpprgm
+
+/**
+ * Import Connectivity Kit `.hpprgm` files as workspace programs (`<name>.hpppl`). The name comes
+ * from the file name (or the name stored in a named G1 file); an invalid one is asked for.
+ */
+export async function importHpprgm(files: File[]): Promise<void> {
+  let done = 0;
+  for (const f of files) {
+    let decoded;
+    try {
+      decoded = decodeHpprgm(new Uint8Array(await f.arrayBuffer()));
+    } catch (e) {
+      setStatus(`${f.name}: ${(e as Error).message}`, 'error');
+      continue;
+    }
+    let name = decoded.name ?? f.name.replace(/\.[^.]*$/, '');
+    if (!isValidName('program', name)) {
+      const typed = await askText(`"${name}" isn't a valid program name. Name for ${f.name}:`, name.replace(/[^A-Za-z0-9_]/g, '_').replace(/^(\d)/, '_$1'), {
+        title: 'Import program',
+        okLabel: 'Import',
+        validate: (v) => (isValidName('program', v) ? null : 'Letters, digits and _; must not start with a digit'),
+      });
+      if (!typed) continue;
+      name = typed;
+    }
+    try {
+      await importObject('program', name, decoded.source, f.name);
+      done++;
+    } catch (e) {
+      setStatus(`Couldn't import ${f.name}: ${(e as Error).message}`, 'error');
+      return;
+    }
+  }
+  if (done) setStatus(`Imported ${done} of ${files.length} .hpprgm file(s)`, 'ok');
+}
+
+/** Download a workspace program as a Connectivity Kit `.hpprgm` (current G2 format). */
+export async function exportHpprgm(file: string): Promise<void> {
+  try {
+    const text = editorBridge.getText(file) ?? (await readFile(file));
+    const procs = analyze(text).procedures.map((p) => ({ name: p.name, exported: p.exported }));
+    const name = programNameFromFile(file);
+    downloadBytes(encodeHpprgm(text, procs), `${name}.hpprgm`, 'application/octet-stream');
+    setStatus(`Exported ${name}.hpprgm`, 'ok');
+  } catch (e) {
+    setStatus(`Couldn't export ${file}: ${(e as Error).message}`, 'error');
+  }
 }
 
 /** Set the calculator's clock to this computer's local time. */

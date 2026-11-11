@@ -197,6 +197,8 @@ The layout of each object type's body is documented separately:
 | `06` | Program | [formats/program.md](formats/program.md) |
 | `0B` | Exam-mode configuration | [formats/exam-mode.md](formats/exam-mode.md) |
 
+The Connectivity Kit's `.hpprgm` program files are a separate, file-only format: [formats/hpprgm.md](formats/hpprgm.md).
+
 ### 6.1 Names
 
 Program names must be valid identifiers: a letter or `_`, then letters, digits or `_`. This project also caps them at 64 characters. The calculator's own limits haven't been tested. In any message, a name can be at most 255 bytes (127 UTF-16 characters), because `nameLen` is one byte.

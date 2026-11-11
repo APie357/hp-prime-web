@@ -7,6 +7,8 @@
     app,
     deleteAppFolder,
     deleteFile,
+    exportHpprgm,
+    importHpprgm,
     openFile,
     renameApp,
     renameFile,
@@ -53,6 +55,14 @@
   });
 
   // Exam configurations show only with the Exam mode setting on.
+  let importInput = $state<HTMLInputElement>();
+  function onImportPick(e: Event) {
+    const input = e.currentTarget as HTMLInputElement;
+    const files = [...(input.files ?? [])];
+    input.value = '';
+    if (files.length) void importHpprgm(files);
+  }
+
   const rootFiles = $derived(app.files.filter((f) => !f.includes('/') && (ui.examMode || fileType(f) !== 'exam')));
   const apps = $derived(workspaceApps(app.files));
   /** Expanded app folders (the one holding the current file is always open). */
@@ -115,6 +125,10 @@
           ><Icon name="database" size={16} /></button
         >
       {/if}
+      <button class="only-icon" title="Import .hpprgm programs (Connectivity Kit)" aria-label="Import .hpprgm" onclick={() => importInput?.click()}
+        ><Icon name="upload_file" size={16} /></button
+      >
+      <input bind:this={importInput} type="file" accept=".hpprgm" multiple hidden onchange={onImportPick} />
       <button class="only-icon" title="Refresh" aria-label="Refresh" onclick={refreshFiles}><Icon name="refresh" size={16} /></button>
       <button class="only-icon" title="New program, note or app" aria-label="New" onclick={() => (app.newFileOpen = true)}
         ><Icon name="add" size={16} /></button
@@ -183,6 +197,11 @@
         <button class="file" onclick={() => openFile(f)} onkeydown={(e) => onKey(e, f)} title="{f} (F2 to rename)">
           <span class="icon" title={fileType(f)}><Icon name={fileIcon(fileType(f))} size={15} /></span>{f}{#if app.dirty.includes(f)}<span class="dot" aria-label="unsaved"><Icon name="circle-fill" size={8} /></span>{/if}
         </button>
+        {#if fileType(f) === 'program'}
+          <button class="act" title="Export as .hpprgm (Connectivity Kit)" aria-label="Export {f} as .hpprgm" onclick={() => exportHpprgm(f)}
+            ><Icon name="file_export" /></button
+          >
+        {/if}
         <button class="act" title="Rename (F2)" aria-label="Rename {f}" onclick={() => renameFile(f)}><Icon name="edit" /></button>
         <button class="act" title="Delete" aria-label="Delete {f}" onclick={() => deleteFile(f)}><Icon name="delete" /></button>
       </li>

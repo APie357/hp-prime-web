@@ -9,6 +9,7 @@ tables come from the following projects:
 | [56phil/prime_connection_kit](https://github.com/56phil/prime_connection_kit) | MIT | G2 hardware findings: 1024-byte reports, `Y` ready reply, silent F7, raw UTF-16 program payload, info-string heuristic. |
 | [golba98/hp-prime-emulator](https://github.com/golba98/hp-prime-emulator) | MIT | F8 NUL-terminated names, EB delete layout + fixture, RGB555LE screenshot samples, PPL builtin command names/arities (seed for `src/lib/lang/catalog.ts`). |
 | [BeatSkip/PrimeDev](https://github.com/BeatSkip/PrimeDev) | MIT | Key code table 0–50 (`HpKey.cs`), V2 negotiated framing notes. |
+| [Insoft-UK/Xprime](https://github.com/Insoft-UK/Xprime) | MIT | `.hpprgm` file layout (G1 and G2) from `hpppl+/src/libhpprgm/src/hpprgm.cpp`; reimplemented in `src/lib/files/hpprgm.ts`. |
 | [microsoft/monaco-editor](https://github.com/microsoft/monaco-editor) | MIT | Code editor. |
 
 ## Bundled runtime dependencies (shipped in the built site)
