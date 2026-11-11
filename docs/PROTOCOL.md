@@ -142,30 +142,18 @@ F8 01 00 00 00 14 06 10 9D 91  4E 00 45 00 57 00 50 00 52 00 4F 00 47 00  00 00
 | Type | Object | Notes |
 |---|---|---|
 | `00` | Settings | e.g. `calc.hpsettings`, `cas.hpsettings`, `calc.hpvars` in a backup (PrimeDev) |
-| `02` | **App** | §6.3. Verified (G2) for reading |
+| `02` | **App** | [App](formats/app.md). Verified (G2) for reading |
 | `03` | List | |
 | `04` | Matrix | |
-| `05` | **Note** | §6.2. Verified (G2) |
-| `06` | **Program** | §6.1. Verified (G2) |
+| `05` | **Note** | [Note](formats/note.md). Verified (G2) |
+| `06` | **Program** | [Program](formats/program.md). Verified (G2) |
 | `07` | App note | An app's Info note |
 | `08` | App program | An app's program |
 | `09` | Complex | |
 | `0A` | Real | |
-| `0B` | Exam-mode configuration | §5.1.1. Format mostly unknown |
+| `0B` | Exam-mode configuration | [Exam mode](formats/exam-mode.md). Format mostly unknown |
 
 Types `02`, `05` and `06` are verified on the G2. The rest come from PrimeDev and hpemu and show up in `F9` backups. Their body formats are not documented here, and this project stores them as raw bytes.
-
-### 5.1.1 Exam-mode configurations (type `0B`)
-
-**Unverified.** The only sample is a Connectivity Kit `.hpexammode` file (the IB Diploma Programme configuration on hpcalc.org, 1156 bytes). Whether a type-`0B` object body is byte-for-byte the same is untested.
-
-| Offset | Size | Content |
-|---|---|---|
-| 0 | 64 | Name, UTF-16LE, NUL-padded (`IB Exam Mode`) |
-| 64 | 1088 | Options and disabled-feature bits. Sample nonzero bytes: `40: 86 06 00 00 00 02 00 00 00 00 00 80 01`, `5B: D0 81 3F 1C E0 00 01 00 C0`, `CC: 50` |
-| 1152 | 4 | `78 00 07 00` (perhaps a 120-minute timeout and flags) |
-
-HP's guides list the options as: name, read-only, timeout (8 h max on the calculator), default angle (or none), password (1–10 characters), memory (keep and restore / erase / hide), Blink LED, and a tree of features to disable: System Apps (each app and its functions), saved apps, physics constants, Help, Units, Matrices, complex numbers, CAS, connectivity (I/O), Notes and Programs, New Notes and Programs, and the Math menu down to single commands. None of these is mapped to a bit yet.
 
 ### 5.2 `F7`: send an object (host → calculator)
 
@@ -200,55 +188,20 @@ EB 01 00 00 00 12 06 0E EF A7  4E 00 45 00 57 00 50 00 52 00 4F 00 47 00
 
 ## 6. Object bodies
 
-### 6.1 Programs (type `06`)
+The layout of each object type's body is documented separately:
 
-**Verified (G2).** The body is the program's **source text in UTF-16LE**, with no BOM and no container, and `\n` line endings.
-
-- What the host sends is exactly the text. What the calculator sends back has a **UTF-16 NUL (`00 00`) added at the end**: a 146-byte upload came back as 148 bytes. Strip trailing NULs when decoding.
-- **Never upload the `.hpprgm` file format.** It contains NUL bytes, and the calculator cuts the program off at the first one. This has destroyed programs before.
-- Non-ASCII characters (`▶`, `≤`, `π`, …) survive the round trip.
-
-### 6.2 Notes (type `05`)
-
-**Verified (G2)** for plain text. The layout comes from pck.
-
-```
-[plain text, UTF-16LE] [00 00] [optional rich-text section]
-```
-
-- The rich-text section starts with the UTF-16 magic `CSWD110` (or `CSWT110` for an app's Info note), then `FF FF FF FF`, then backslash control words for bold, colors and so on. **Reference (pck).**
-- Uploading only the plain text works, and the calculator shows it correctly, but it **removes any existing formatting** from that note.
-- Note names are freer than program names: spaces are allowed.
-- The Connectivity Kit sometimes writes 2-byte placeholder notes with junk content. Treat a body under 4 bytes as empty.
-
-### 6.3 Apps (type `02`)
-
-**Verified (G2)** for reading: all 19 apps in a G2 backup (the 18 built-ins plus a custom Python app) parse and rebuild byte for byte with this layout. Sending apps hasn't been tried on hardware yet.
-
-The body is a series of sections, each `u32 big-endian length | bytes`:
-
-| # | Section | Contents |
+| Type | Object | Document |
 |---|---|---|
-| 0 | App data (the Connectivity Kit's `.hpapp`) | A tagged-object "variable bag": `7C 61 8A B2 FF FF FF FF …`, then little-endian records `u32 len \| u32 type \| payload`. **Byte 20 = base app** (table below). It does **not** contain the app's name. |
-| 1 | Info note | Like a note (§6.2): UTF-16LE + NUL; `00 00` when empty |
-| 2 | App program | UTF-16LE + NUL. The built-in Function and Triangle Solver apps carry a 36-byte binary stub here instead (it contains `Main`). |
-| 3… | Extra files | File name (UTF-16LE) + `00 00` + the file's bytes, e.g. `dynatris.py` (plain UTF-8 Python, CRLF), `icon.png`, other data files |
+| `02` | App | [formats/app.md](formats/app.md) |
+| `05` | Note | [formats/note.md](formats/note.md) |
+| `06` | Program | [formats/program.md](formats/program.md) |
+| `0B` | Exam-mode configuration | [formats/exam-mode.md](formats/exam-mode.md) |
 
-- **Names:** built-in apps are named with a leading `&` (`&Function`, `&Statistics 1Var`). Custom apps have plain names (`Dynatris`).
-- **Base app (bag byte 20)**, per prime_connection_kit: 0 Function, 1 Solve, 2 Statistics 1Var, 3 Statistics 2Var, 4 Inference, 5 Parametric, 6 Polar, 7 Sequence, 8 Finance, 9 Linear Solver, 10 Triangle Solver, 14 Data Streamer, 15 Geometry, 16 Spreadsheet, 17 Advanced Graphing, 18 Graph 3D, 19 Explorer, 20 None, 21 Python. Matches all 18 built-ins on the G2.
-- **Python apps:** the app program holds `#PYTHON name()` … `#END` blocks (e.g. `START()`, `RESET()`). Modules travel as extra files in plain text. A compressed-looking `.bin` file inside Dynatris is that app's own format: its `.py` decompresses it. It isn't something the calculator does.
-- **Icon:** an extra file named `icon.png`. Dynatris's is a 38×38, 4-bit palette PNG. Whether other sizes or PNG kinds work is untested.
-- **No separate `07`/`08` objects** appeared in a G2 backup: the note and program travel inside the type-02 body. (hplp marks `07`/`08` as tentative; pck sends them separately.)
-- **New apps:** since the bag has no name, a new app is a base app's bag sent under a new name with its own program. **Unverified:** whether the calculator accepts an app created this way.
-- **Fetching one app** with `F8` type `02` is untested. Listing works through the backup (§7).
-
-### 6.4 Names
+### 6.1 Names
 
 Program names must be valid identifiers: a letter or `_`, then letters, digits or `_`. This project also caps them at 64 characters. The calculator's own limits haven't been tested. In any message, a name can be at most 255 bytes (127 UTF-16 characters), because `nameLen` is one byte.
 
----
-
-### 6.5 Objects the calculator sends by itself
+### 6.2 Objects the calculator sends by itself
 
 **Verified (G2).** The calculator's **Send** softkey (Apps screen, Program Catalog, Notes catalog) pushes the selected object to the host as an ordinary `F7` message (§5), without any request and without a closing frame. The host has to be reading while idle, as for chat (§9.2). An `F7` that arrives while the host waits for some other reply belongs to this too. This project collects whatever arrives within 1.5 s and asks before saving it.
 
