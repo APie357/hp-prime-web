@@ -1,17 +1,29 @@
 <script lang="ts">
   import Icon from './Icon.svelte';
   import {
+    ANGLE_LABELS,
+    checksumStatus,
     diffBits,
+    EXAM_CRC_OFFSET,
     EXAM_FEATURES,
     EXAM_NAME_BYTES,
     EXAM_SAMPLE_SIZE,
     EXAM_PASSWORD_RANGE,
     EXAM_TIMEOUT_MAX,
     examName,
+    examOptions,
     examTimeout,
     getBit,
-    withExamTimeout,
+    LED_LABELS,
+    MEMORY_LABELS,
+    samePassword,
     setBit,
+    withExamOptions,
+    withExamTimeout,
+    withPasswordFrom,
+    type ExamAngle,
+    type ExamLed,
+    type ExamMemory,
   } from '../lib/files/exam';
   import { fileType } from '../lib/files/kinds';
   import { programNameFromFile } from '../lib/files/workspace';
@@ -34,6 +46,42 @@
   });
 
   const fileName = $derived(programNameFromFile(file));
+  const opts = $derived(data ? examOptions(data) : null);
+  const crc = $derived(data ? checksumStatus(data) : 'none');
+  const inPw = (i: number) => i >= EXAM_PASSWORD_RANGE[0] && i < EXAM_PASSWORD_RANGE[1];
+  const inCrc = (i: number) => i >= EXAM_CRC_OFFSET && i < EXAM_CRC_OFFSET + 4;
+
+  /** Configurations to copy a password from or compare with: the calculator's, then workspace files. */
+  async function loadChoice(id: string): Promise<Uint8Array | null> {
+    if (id.startsWith(CALC)) return app.calcExams.find((e) => e.name === id.slice(CALC.length))?.data ?? null;
+    return readExamFile(id).catch(() => null);
+  }
+
+  /** Names of the other configurations whose password is the same as this one's. */
+  let samePw = $state<string[]>([]);
+  $effect(() => {
+    const d = data;
+    const list = choices;
+    if (!d) return;
+    let canceled = false;
+    void Promise.all(
+      list.map(async (c) => {
+        const o = await loadChoice(c.id);
+        return o && samePassword(d, o) ? c.label : null;
+      }),
+    ).then(
+      (r) => !canceled && (samePw = r.filter((x): x is string => !!x)),
+    );
+    return () => (canceled = true);
+  });
+
+  async function copyPassword(e: Event & { currentTarget: HTMLSelectElement }) {
+    const id = e.currentTarget.value;
+    e.currentTarget.value = '';
+    if (!id || !data) return;
+    const src = await loadChoice(id);
+    if (src) await update(withPasswordFrom(data, src));
+  }
   const storedName = $derived(data ? examName(data) : '');
 
   async function update(next: Uint8Array) {
@@ -90,12 +138,6 @@
     }
     return out;
   });
-  const setCount = $derived.by(() => {
-    if (!data) return 0;
-    let n = 0;
-    for (let i = EXAM_NAME_BYTES; i < data.length; i++) for (let b = data[i]; b; b &= b - 1) n++;
-    return n;
-  });
 </script>
 
 <div class="exam">
@@ -107,17 +149,21 @@
       <Icon name="shield_lock" size={22} />
       <div>
         <h2 class="title">{fileName}</h2>
-        <p class="muted">Exam-mode configuration · {data.length} bytes · {setCount} bits set</p>
+        <p class="muted">
+          Exam-mode configuration · {data.length} bytes ·
+          {#if crc === 'ok'}checksum ✓{:else if crc === 'none'}no checksum (older Connectivity Kit file){:else}<span class="warn"
+              >checksum doesn't match the formula seen on the G2</span
+            >{/if}
+        </p>
       </div>
     </header>
 
     <div class="note">
       <Icon name="science" size={16} />
       <div>
-        HP doesn't document this format. Only the name and timeout are decoded so far; the other options are shown
-        as raw bits, and everything else is kept byte for byte. The password can't be changed here: copy a
-        configuration that has the password you want from the calculator. If that password block also protects the
-        other settings, edits made here may be rejected. Sending exam configurations hasn't been tried on hardware yet.
+        HP doesn't document this format; it was worked out from configurations made on a G2. Only CAS is mapped among
+        the disabled features (the rest are the raw bits below). The checksum is updated on every change and matches
+        what the calculator writes. Sending exam configurations hasn't been tried on hardware yet.
       </div>
     </div>
     {#if data.length !== EXAM_SAMPLE_SIZE}
@@ -151,8 +197,42 @@
       </section>
     {/if}
 
+    {#if opts}
+      <section>
+        <h3>Options</h3>
+        <div class="grid">
+          <label for="exam-angle">Angle</label>
+          <select id="exam-angle" value={opts.angle} onchange={(e) => update(withExamOptions(data!, { angle: e.currentTarget.value as ExamAngle }))}>
+            {#each Object.entries(ANGLE_LABELS) as [v, l] (v)}<option value={v}>{l}</option>{/each}
+          </select>
+          <label for="exam-memory">Memory</label>
+          <select id="exam-memory" value={opts.memory} onchange={(e) => update(withExamOptions(data!, { memory: e.currentTarget.value as ExamMemory }))}>
+            {#each Object.entries(MEMORY_LABELS) as [v, l] (v)}<option value={v}>{l}</option>{/each}
+          </select>
+          <label for="exam-led">LED</label>
+          <select id="exam-led" value={opts.led} onchange={(e) => update(withExamOptions(data!, { led: e.currentTarget.value as ExamLed }))}>
+            {#each Object.entries(LED_LABELS) as [v, l] (v)}
+              {#if v !== 'other' || opts.led === 'other'}<option value={v} disabled={v === 'other'}>{l}</option>{/if}
+            {/each}
+          </select>
+        </div>
+      </section>
+
+      <section>
+        <h3>Password</h3>
+        <p class="muted">
+          {#if samePw.length}Same as {samePw.join(', ')}.{:else}Not the same as any other configuration here.{/if}
+          It's stored as a hash, so it can't be typed here; copy it from a configuration that has the password you want.
+        </p>
+        <select aria-label="Copy the password from" onchange={copyPassword} disabled={!choices.length}>
+          <option value="">Copy password from…</option>
+          {#each choices as c (c.id)}<option value={c.id}>{c.label}</option>{/each}
+        </select>
+      </section>
+    {/if}
+
     <section>
-      <h3>Options</h3>
+      <h3>Disabled features</h3>
       {#if EXAM_FEATURES.length}
         <ul class="features">
           {#each EXAM_FEATURES as f (f.offset * 8 + f.bit)}
@@ -169,12 +249,12 @@
           {/each}
         </ul>
       {:else}
-        <p class="muted">
-          None of the other options (angle, memory, Blink LED, security code, disabled features) have been located in
-          the file yet. To find one, change just that option on the calculator, send the configuration here, and
-          compare it with the previous copy below.
-        </p>
+        <p class="muted">None mapped yet.</p>
       {/if}
+      <p class="muted">
+        Only these are mapped so far. To map another, disable just that feature in a copy on the calculator, bring it
+        here, and compare the two below.
+      </p>
     </section>
 
     <section>
@@ -223,9 +303,9 @@
                 class:zero={data[i] === 0}
                 class:diff={diffOffsets.has(i)}
                 class:sel={selected === i}
-                class:pw={i >= EXAM_PASSWORD_RANGE[0] && i < EXAM_PASSWORD_RANGE[1]}
+                class:pw={inPw(i) || inCrc(i)}
                 role="gridcell"
-                title={i >= EXAM_PASSWORD_RANGE[0] && i < EXAM_PASSWORD_RANGE[1] ? `0x${hex(i, 3)} (password block)` : `0x${hex(i, 3)}`}
+                title={inCrc(i) ? `0x${hex(i, 3)} (checksum, set automatically)` : inPw(i) ? `0x${hex(i, 3)} (password hash)` : `0x${hex(i, 3)}`}
                 onclick={() => (selected = selected === i ? null : i)}>{hex(data[i])}</button
               >
             {/each}
@@ -318,6 +398,12 @@
     border: 1px solid var(--input-border);
     border-radius: 4px;
     padding: 2px 6px;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: max-content max-content;
+    align-items: center;
+    gap: 6px 12px;
   }
   .features {
     list-style: none;
