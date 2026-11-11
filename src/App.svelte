@@ -189,7 +189,10 @@
     display: grid;
     min-height: 0;
   }
+  /* Fixed height: otherwise a button's height follows its icon size (16 vs 18px) and they don't line up. */
   .toolbar button {
+    box-sizing: border-box;
+    height: 26px;
     display: inline-flex;
     align-items: center;
     gap: 5px;
