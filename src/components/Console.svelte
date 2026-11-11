@@ -22,6 +22,21 @@
     }
   }
 
+  /** Experiments, e.g. for clearing the calculator's Messages "Help•" flag (see TODO.md). */
+  const presets: [string, string][] = [
+    ['FF', 'ready check'],
+    ['F2 01 00 00 00 02 00 00', 'help-clear? empty chat (echo of Help)'],
+    ['F2 02 00 00 00 02 00 00', 'help-clear? empty chat, flag 02'],
+    ['F2 03 00 00 00 02 00 00', 'help-clear? empty chat, flag 03 (PrimeDev chat flag)'],
+    ['F2 01 00 00 00 00', 'help-clear? zero-length chat'],
+    ['F2 03 00 00 00 00', 'help-clear? zero-length chat, flag 03'],
+    ['F2 00 00 00 00 02 00 00', 'help-clear? empty chat, flag 00'],
+    ['F3 01 00 00 00 00', 'unknown opcode F3 (empty)'],
+    ['F4 01 00 00 00 00', 'unknown opcode F4 (empty)'],
+    ['F5 01 00 00 00 00', 'unknown opcode F5 (empty)'],
+    ['F6 01 00 00 00 00', 'unknown opcode F6 (empty)'],
+  ];
+
   const time = (t: number) => new Date(t).toLocaleTimeString([], { hour12: false });
 </script>
 
@@ -34,7 +49,10 @@
     </label>
     <label><input type="checkbox" bind:checked={app.verifyAfterSend} /> verify after send</label>
     <form class="raw" onsubmit={doRaw}>
-      <input bind:value={rawHex} placeholder="raw message hex" spellcheck="false" disabled={!app.connected} />
+      <input bind:value={rawHex} placeholder="raw message hex" spellcheck="false" list="raw-presets" disabled={!app.connected} />
+      <datalist id="raw-presets">
+        {#each presets as [bytes, label] (bytes)}<option value={bytes}>{label}</option>{/each}
+      </datalist>
       <label><input type="checkbox" bind:checked={expectReply} /> reply</label>
       <button type="submit" disabled={!app.connected || !!app.busy}>Send raw</button>
     </form>

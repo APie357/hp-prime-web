@@ -40,6 +40,10 @@ The user confirmed on 2026-11-09 that connect, send, receive, list, and fetch wo
   - [x] On the G2: sent messages appear on the calculator, and its replies arrive as `F2 01 len(u32BE) UTF-16LE text 00 00`
   - [x] Receiving works in the web UI (idle listener); the Help softkey shows as a help request
   - [ ] Check receiving while the live screen is on
+  - [ ] Find the host packet that clears the calculator's **Help•** flag (it turns on, never off). Try in order, checking the dot after each:
+    1. a normal chat message from the web UI
+    2. the console raw presets (open the raw box's dropdown): empty chat with flags 01/02/03/00, zero-length chat, then F3–F6 with an empty body
+    3. on the calculator: press Help again, Reply, OK, leave and re-enter Messages, disconnect/replug
 - [x] Full backup to a `.zip` (`src/lib/files/backup.ts`: `manifest.json`, `raw/<type>/<name>.bin` for every object, readable `programs/` and `notes/`)
 - [x] Restore programs and notes from a backup `.zip` (through the verified send path; other object types are skipped)
   - [ ] On the G2: back up, restore, and compare
