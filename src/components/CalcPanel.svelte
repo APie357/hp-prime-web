@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from './Icon.svelte';
   import type { TextKind } from '../lib/hid/session';
   import { appDisplayName, isSystemApp } from '../lib/files/app';
   import {
@@ -99,7 +100,7 @@
         Chat
         {#if app.helpPending}
           <button class="help-btn" onclick={clearHelp} disabled={!!app.busy} title="Turn off the Help• flag on the calculator">
-            ✋ Clear help
+            <Icon name="back_hand" size={14} /> Clear help
           </button>
         {/if}
         {#if app.chat.length}<button class="link" onclick={clearChat} title="Clear the chat log">clear</button>{/if}
@@ -110,7 +111,7 @@
             <li class={line.dir} title={new Date(line.at).toLocaleTimeString()}>
               <span class="who">{line.dir === 'in' ? 'Calc' : 'You'}</span>
               {#if line.help}
-                <span class="text help">✋ asked for help</span>
+                <span class="text help"><Icon name="back_hand" size={14} /> asked for help</span>
               {:else}
                 <span class="text">{line.text}</span>
               {/if}
@@ -143,7 +144,7 @@
               onclick={() => deleteCalcApp(a.name)}
               disabled={!!app.busy || isSystemApp(a.name)}
               title={isSystemApp(a.name) ? 'Built-in apps can’t be deleted' : 'Delete from the calculator'}
-              aria-label="Delete app {a.name} from the calculator">✕</button
+              aria-label="Delete app {a.name} from the calculator"><Icon name="delete" /></button
             >
           </li>
         {:else}
@@ -164,7 +165,7 @@
                 onclick={() => deleteCalcObject(o.kind, o.name)}
                 disabled={!!app.busy}
                 title="Delete from the calculator"
-                aria-label="Delete {o.name} from the calculator">✕</button>
+                aria-label="Delete {o.name} from the calculator"><Icon name="delete" /></button>
             </li>
           {:else}
             <li class="muted">{app.calcListedAt ? `No ${group.title.toLowerCase()}` : 'Click “List contents” to read them'}</li>
@@ -249,6 +250,11 @@
     font-size: 12px;
     padding: 1px 8px;
   }
+  li button.danger {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 4px;
+  }
   .chat-log {
     max-height: 140px;
     overflow: auto;
@@ -274,11 +280,17 @@
     font-family: var(--mono);
   }
   .chat-log .help {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
     font-family: inherit;
     font-style: italic;
     color: var(--hl);
   }
   h3 .help-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
     margin-left: 8px;
     font-size: 11px;
     padding: 0 6px;

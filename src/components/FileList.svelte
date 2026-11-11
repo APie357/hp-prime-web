@@ -23,6 +23,8 @@
   } from '../lib/state.svelte';
   import { ICON_FILE } from '../lib/files/icon';
   import PythonLogo from './PythonLogo.svelte';
+  import Icon from './Icon.svelte';
+  import { fileIcon } from '../lib/icons';
 
   /** Object URLs for app icons shown in the list, by app name. */
   let iconUrls = $state<Record<string, string>>({});
@@ -49,16 +51,6 @@
       setTimeout(() => made.forEach((u) => URL.revokeObjectURL(u)), 5000);
     };
   });
-
-  const ICONS: Record<string, string> = {
-    program: '▸',
-    note: '✎',
-    'app-program': '▸',
-    'app-note': '✎',
-    python: '',
-    text: '≡',
-    binary: '◆',
-  };
 
   const rootFiles = $derived(app.files.filter((f) => !f.includes('/')));
   const apps = $derived(workspaceApps(app.files));
@@ -105,10 +97,12 @@
   <header>
     <h2>Files</h2>
     <div class="actions">
-      <button title="New program" onclick={() => newFile('program')}>＋ Prgm</button>
-      <button title="New note" onclick={() => newFile('note')}>＋ Note</button>
-      <button title="New app (based on a calculator app; experimental)" onclick={() => (app.newAppOpen = true)}>＋ App</button>
-      <button title="Refresh" onclick={refreshFiles}>⟳</button>
+      <button title="New program" onclick={() => newFile('program')}><Icon name="add" size={15} />Prgm</button>
+      <button title="New note" onclick={() => newFile('note')}><Icon name="add" size={15} />Note</button>
+      <button title="New app (based on a calculator app; experimental)" onclick={() => (app.newAppOpen = true)}
+        ><Icon name="add" size={15} />App</button
+      >
+      <button class="only-icon" title="Refresh" aria-label="Refresh" onclick={refreshFiles}><Icon name="refresh" size={16} /></button>
     </div>
   </header>
 
@@ -117,7 +111,8 @@
       <button class="wide" onclick={reopenFolder}>Reopen “{app.workspaceLabel}”</button>
     {:else if app.workspaceLabel}
       <span class="ws-label" title={app.workspaceKind === 'folder' ? 'Local folder' : 'Stored in this browser'}>
-        {app.workspaceKind === 'folder' ? '📁' : '💾'} {app.workspaceLabel}
+        <Icon name={app.workspaceKind === 'folder' ? 'folder' : 'database'} size={16} />
+        <span class="ws-name">{app.workspaceLabel}</span>
       </span>
     {/if}
     <div class="ws-buttons">
@@ -134,13 +129,13 @@
     {#each apps as name (name)}
       <li class="app-row" class:open={isOpen(name)}>
         <button class="file" onclick={() => toggle(name)} aria-expanded={isOpen(name)} title={appDirName(name)}>
-          <span class="icon chev">{isOpen(name) ? '▾' : '▸'}</span>{#if iconUrls[name]}<img
+          <span class="icon chev"><Icon name={isOpen(name) ? 'keyboard_arrow_down' : 'keyboard_arrow_right'} size={16} /></span>{#if iconUrls[name]}<img
               class="app-img"
               src={iconUrls[name]}
               alt=""
               width="16"
               height="16"
-            />{:else}<span class="app-icon">▣</span>{/if}{appDisplayName(name)}
+            />{:else}<span class="app-icon"><Icon name="widgets" size={16} /></span>{/if}{appDisplayName(name)}
           {#if isSystemApp(name)}<span class="tag">built-in</span>{/if}
         </button>
         <button
@@ -148,24 +143,20 @@
           title="Send app to the calculator"
           aria-label="Send app {appDisplayName(name)}"
           disabled={!app.connected || !!app.busy}
-          onclick={() => sendAppFolder(name)}>⇪</button
+          onclick={() => sendAppFolder(name)}><Icon name="upload" /></button
         >
         <button
           class="act"
           title="Set icon (any image; cropped to a square and scaled to 38×38)"
           aria-label="Set icon of {appDisplayName(name)}"
           onclick={() => setAppIcon(name)}
-          ><svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
-            <rect x="1.5" y="2.5" width="13" height="11" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.3" />
-            <circle cx="5.5" cy="6" r="1.3" fill="currentColor" />
-            <path d="M2.5 12.5l3.8-4 2.6 2.6 1.8-1.8 3 3.2" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" />
-          </svg></button
+          ><Icon name="image" /></button
         >
-        <button class="act" title="Add a file (e.g. a Python module)" aria-label="Add a file to {appDisplayName(name)}" onclick={() => addAppFile(name)}>＋</button>
+        <button class="act" title="Add a file (e.g. a Python module)" aria-label="Add a file to {appDisplayName(name)}" onclick={() => addAppFile(name)}><Icon name="add" /></button>
         {#if !isSystemApp(name)}
-          <button class="act" title="Rename app" aria-label="Rename app {appDisplayName(name)}" onclick={() => renameApp(name)}>✏</button>
+          <button class="act" title="Rename app" aria-label="Rename app {appDisplayName(name)}" onclick={() => renameApp(name)}><Icon name="edit" /></button>
         {/if}
-        <button class="act" title="Delete app folder" aria-label="Delete app {appDisplayName(name)}" onclick={() => deleteAppFolder(name)}>✕</button>
+        <button class="act" title="Delete app folder" aria-label="Delete app {appDisplayName(name)}" onclick={() => deleteAppFolder(name)}><Icon name="delete" /></button>
       </li>
       {#if isOpen(name)}
         {#each innerFiles(name) as f (f)}
@@ -179,12 +170,12 @@
               title={editable ? `${f} (F2 to rename)` : `${f} (binary; sent as-is)`}
             >
               <span class="icon"
-                >{#if fileType(f) === 'python'}<PythonLogo size={12} />{:else}{ICONS[fileType(f)]}{/if}</span
-              >{label(f, name)}{#if app.dirty.includes(f)}<span class="dot">●</span>{/if}
+                >{#if fileType(f) === 'python'}<PythonLogo size={13} />{:else}<Icon name={fileIcon(fileType(f))} size={15} />{/if}</span
+              >{label(f, name)}{#if app.dirty.includes(f)}<span class="dot" aria-label="unsaved"><Icon name="circle-fill" size={8} /></span>{/if}
             </button>
             {#if label(f, name) === f.slice(appDirName(name).length + 1)}
-              <button class="act" title="Rename (F2)" aria-label="Rename {f}" onclick={() => renameFile(f)}>✏</button>
-              <button class="act" title="Delete" aria-label="Delete {f}" onclick={() => deleteFile(f)}>✕</button>
+              <button class="act" title="Rename (F2)" aria-label="Rename {f}" onclick={() => renameFile(f)}><Icon name="edit" /></button>
+              <button class="act" title="Delete" aria-label="Delete {f}" onclick={() => deleteFile(f)}><Icon name="delete" /></button>
             {/if}
           </li>
         {/each}
@@ -193,10 +184,10 @@
     {#each rootFiles as f (f)}
       <li class:active={app.current === f}>
         <button class="file" onclick={() => openFile(f)} onkeydown={(e) => onKey(e, f)} title="{f} (F2 to rename)">
-          <span class="icon" title={fileType(f)}>{ICONS[fileType(f)]}</span>{f}{#if app.dirty.includes(f)}<span class="dot">●</span>{/if}
+          <span class="icon" title={fileType(f)}><Icon name={fileIcon(fileType(f))} size={15} /></span>{f}{#if app.dirty.includes(f)}<span class="dot" aria-label="unsaved"><Icon name="circle-fill" size={8} /></span>{/if}
         </button>
-        <button class="act" title="Rename (F2)" aria-label="Rename {f}" onclick={() => renameFile(f)}>✏</button>
-        <button class="act" title="Delete" aria-label="Delete {f}" onclick={() => deleteFile(f)}>✕</button>
+        <button class="act" title="Rename (F2)" aria-label="Rename {f}" onclick={() => renameFile(f)}><Icon name="edit" /></button>
+        <button class="act" title="Delete" aria-label="Delete {f}" onclick={() => deleteFile(f)}><Icon name="delete" /></button>
       </li>
     {/each}
     {#if !app.files.length}
@@ -214,10 +205,26 @@
     gap: 6px;
   }
   .ws-label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
     font-size: 13px;
+    color: var(--muted);
+  }
+  .ws-name {
+    color: var(--fg);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .actions button {
+    display: inline-flex;
+    align-items: center;
+    gap: 1px;
+    padding-left: 4px;
+  }
+  .actions .only-icon {
+    padding: 2px 4px;
   }
   .ws-buttons {
     display: flex;
@@ -270,9 +277,6 @@
     border: none;
     color: var(--muted);
   }
-  .act svg {
-    display: block;
-  }
   .act:hover:not(:disabled) {
     background: var(--hover);
     color: var(--fg);
@@ -282,8 +286,9 @@
     visibility: visible;
   }
   .icon {
-    display: inline-block;
-    width: 14px;
+    display: inline-flex;
+    width: 20px;
+    vertical-align: -3px;
     color: var(--muted);
   }
   .file:disabled {
@@ -302,7 +307,9 @@
     border-radius: 2px;
   }
   .app-icon {
+    display: inline-flex;
     margin-right: 5px;
+    vertical-align: -3px;
     color: var(--teal);
   }
   .tag {
@@ -312,11 +319,13 @@
     font-family: system-ui, sans-serif;
   }
   .chev {
-    width: 12px;
+    width: 18px;
   }
   .dot {
+    display: inline-flex;
     color: var(--accent);
-    margin-left: 4px;
+    margin-left: 5px;
+    vertical-align: 1px;
   }
   .none {
     color: var(--muted);
