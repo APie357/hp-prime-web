@@ -7,13 +7,7 @@
   let name = $state('');
   let bases = $state<AppBase[] | null>(null);
   let chosen = $state(0);
-  let lang = $state<AppLanguage>('python');
-  /** Follow the base until the user picks a language themselves. */
-  let langTouched = false;
-  $effect(() => {
-    const base = bases?.[chosen]?.base;
-    if (!langTouched && base) lang = base === 'None' || base === 'Python' ? 'python' : 'ppl';
-  });
+  let lang = $state<AppLanguage>('ppl');
   const valid = $derived(isValidAppName(name.trim()));
 
   async function load() {
@@ -92,7 +86,11 @@
     <fieldset>
       <legend>Program</legend>
       <label class="radio">
-        <input type="radio" name="lang" value="python" bind:group={lang} onchange={() => (langTouched = true)} />
+        <input type="radio" name="lang" value="ppl" bind:group={lang} />
+        <span>PPL <span class="muted">— a <code>START()</code> program</span></span>
+      </label>
+      <label class="radio">
+        <input type="radio" name="lang" value="python" bind:group={lang} />
         <span>
           Python
           <span class="muted">
@@ -100,10 +98,6 @@
             <code>#PYTHON START()</code>
           </span>
         </span>
-      </label>
-      <label class="radio">
-        <input type="radio" name="lang" value="ppl" bind:group={lang} onchange={() => (langTouched = true)} />
-        <span>PPL <span class="muted">— a <code>START()</code> program</span></span>
       </label>
     </fieldset>
     <footer>
