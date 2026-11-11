@@ -20,6 +20,7 @@
   } from '../lib/state.svelte';
   import { ui } from '../lib/ui.svelte';
 
+  let showInfo = $state(false);
   let fetchName = $state('');
   let fetchKind = $state<TextKind | 'app'>('program');
   let chatText = $state('');
@@ -51,6 +52,15 @@
       <div class="actions">
         <button
           class="icon"
+          class:on={showInfo}
+          aria-pressed={showInfo}
+          aria-controls="calc-info"
+          onclick={() => (showInfo = !showInfo)}
+          title={showInfo ? 'Hide calculator info' : 'Show calculator info (model, name, firmware)'}
+          aria-label="Calculator info"><Icon name="info" size={16} /></button
+        >
+        <button
+          class="icon"
           onclick={refreshCalcContents}
           disabled={!!app.busy}
           title="List contents: read all apps, programs and notes (full backup, ~20 s)"
@@ -70,12 +80,14 @@
   {#if !app.connected}
     <p class="muted pad">Not connected.</p>
   {:else}
-    <dl class="pad">
-      <dt>Device</dt>
-      <dd>{app.deviceLabel}</dd>
-      {#if app.info?.name}<dt>Name</dt><dd>{app.info.name}</dd>{/if}
-      {#if app.info?.firmware}<dt>Firmware</dt><dd>{app.info.firmware}</dd>{/if}
-    </dl>
+    {#if showInfo}
+      <dl class="pad" id="calc-info">
+        <dt>Device</dt>
+        <dd>{app.deviceLabel}</dd>
+        {#if app.info?.name}<dt>Name</dt><dd>{app.info.name}</dd>{/if}
+        {#if app.info?.firmware}<dt>Firmware</dt><dd>{app.info.firmware}</dd>{/if}
+      </dl>
+    {/if}
 
     {#if ui.backupRestore}
       <div class="pad row">
@@ -203,6 +215,10 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
+  }
+  .actions .icon.on {
+    background: var(--sel);
+    border-color: var(--accent);
   }
   .pad {
     padding: 6px 10px;
