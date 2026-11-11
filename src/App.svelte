@@ -3,18 +3,55 @@
   import Editor from './components/Editor.svelte';
   import FileList from './components/FileList.svelte';
   import CalcPanel from './components/CalcPanel.svelte';
+  import ScreenPanel from './components/ScreenPanel.svelte';
   import Console from './components/Console.svelte';
-  import { app, connect, disconnect, initWorkspace, sendCurrent, toggleConsole } from './lib/state.svelte';
+  import Splitter from './components/Splitter.svelte';
+  import DiffView from './components/DiffView.svelte';
+  import NewAppDialog from './components/NewAppDialog.svelte';
+  import Icon from './components/Icon.svelte';
+  import { appDisplayName, appOfPath } from './lib/files/app';
+  import { fileType } from './lib/files/kinds';
+  import { cycleTheme, resetSize, resolvedTheme, saveLayout, setSize, ui, type Layout } from './lib/ui.svelte';
+  import { app, autoConnect, connect, disconnect, initWorkspace, sendAndRun, sendCurrent, toggleConsole } from './lib/state.svelte';
   import { programNameFromFile } from './lib/files/workspace';
+
+  const isProgram = $derived(!!app.current && fileType(app.current) === 'program');
+  const currentApp = $derived(app.current ? appOfPath(app.current) : null);
+  const sendLabel = $derived(
+    !app.current ? '' : currentApp ? `app ${appDisplayName(currentApp)}` : programNameFromFile(app.current),
+  );
+
+  // Theme: data-theme on <html> only when chosen explicitly; Auto follows the system via CSS.
+  $effect(() => {
+    if (ui.theme === 'auto') delete document.documentElement.dataset.theme;
+    else document.documentElement.dataset.theme = ui.theme;
+  });
+
+  const themeIcon = $derived(ui.theme === 'auto' ? 'brightness_auto' : ui.theme === 'light' ? 'light_mode' : 'dark_mode');
+
+  // Panel resizing: remember the size when a drag starts and apply the pointer delta.
+  let startSize = 0;
+  function resizer(k: keyof Layout, sign: 1 | -1) {
+    return {
+      onstart: () => (startSize = ui.layout[k]),
+      ondrag: (d: number) => setSize(k, startSize + sign * d),
+      onend: saveLayout,
+      onreset: () => resetSize(k),
+    };
+  }
 
   onMount(() => {
     initWorkspace();
+    void autoConnect();
   });
 
   function onKey(e: KeyboardEvent) {
     if ((e.ctrlKey || e.metaKey) && e.key === '`') {
       e.preventDefault();
       toggleConsole();
+    } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'Enter') {
+      e.preventDefault();
+      if (app.connected && !app.busy) sendAndRun();
     }
   }
 </script>
@@ -26,19 +63,33 @@
     <h1>HP Prime Web IDE</h1>
     {#if app.connected}
       <button onclick={disconnect}>Disconnect</button>
-      <span class="dev ok">● {app.deviceLabel}</span>
+      <span class="dev ok"><Icon name="usb" size={16} /> {app.deviceLabel}</span>
     {:else}
-      <button class="primary" onclick={connect} disabled={!app.hidSupported || !!app.busy}>Connect calculator</button>
-      <span class="dev">○ not connected</span>
+      <button class="primary" onclick={connect} disabled={!app.hidSupported || !!app.busy}><Icon name="usb" size={16} /> Connect calculator</button
+      >
+      <span class="dev"><Icon name="usb_off" size={16} /> not connected</span>
     {/if}
     <span class="spacer"></span>
+    <button
+      class="theme"
+      onclick={cycleTheme}
+      title="Theme: {ui.theme === 'auto' ? `Auto (${resolvedTheme()})` : ui.theme} — click to change"
+      aria-label="Theme: {ui.theme}"><Icon name={themeIcon} size={18} /></button
+    >
     <button
       class="primary"
       onclick={sendCurrent}
       disabled={!app.connected || !app.current || !!app.busy}
       title="Send the open program to the calculator (Ctrl+Enter)"
     >
-      Send {app.current ? programNameFromFile(app.current) : ''} to calculator
+      <Icon name="upload" size={16} /> Send {sendLabel} to calculator
+    </button>
+    <button
+      onclick={sendAndRun}
+      disabled={!app.connected || !isProgram || !!app.busy}
+      title="Send the program, then start it from the Home view using remote key presses and show the screen live (experimental; Ctrl+Shift+Enter)"
+    >
+      <Icon name="play_arrow" size={18} /> Send &amp; Run
     </button>
   </header>
 
@@ -49,14 +100,25 @@
     </div>
   {/if}
 
-  <main>
+  <main style:grid-template-columns="{ui.layout.left}px auto minmax(0, 1fr) auto {ui.layout.right}px">
     <aside class="left"><FileList /></aside>
+    <Splitter dir="x" label="Resize file list" {...resizer('left', 1)} />
     <div class="center"><Editor /></div>
-    <aside class="right"><CalcPanel /></aside>
+    <Splitter dir="x" label="Resize calculator panel" {...resizer('right', -1)} />
+    <aside class="right"><ScreenPanel /><CalcPanel /></aside>
   </main>
 
   {#if app.showConsole}
-    <div class="bottom"><Console /></div>
+    <div class="bottom" style:height="{ui.layout.console}px">
+      <Splitter dir="y" label="Resize console" {...resizer('console', -1)} />
+      <Console />
+    </div>
+  {/if}
+
+  {#if app.newAppOpen}<NewAppDialog />{/if}
+
+  {#if app.diff}
+    {#key app.diff}<DiffView req={app.diff} />{/key}
   {/if}
 
   <footer class="status {app.statusKind}">
@@ -70,7 +132,7 @@
       title="Toggle console (Ctrl+`)"
       aria-pressed={app.showConsole}
     >
-      {app.showConsole ? '▾' : '▴'} Console
+      <Icon name={app.showConsole ? 'keyboard_arrow_down' : 'keyboard_arrow_up'} size={16} /> Console
     </button>
   </footer>
 </div>
@@ -100,11 +162,14 @@
     font-weight: 600;
   }
   .dev {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
     font-size: 13px;
     color: var(--muted);
   }
   .dev.ok {
-    color: #8bd17c;
+    color: var(--ok);
   }
   .spacer {
     flex: 1;
@@ -117,8 +182,17 @@
   }
   main {
     display: grid;
-    grid-template-columns: 220px 1fr 280px;
     min-height: 0;
+  }
+  .toolbar button {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .theme {
+    width: 30px;
+    justify-content: center;
+    padding: 3px 0;
   }
   .left,
   .right {
@@ -126,19 +200,21 @@
     display: flex;
     background: var(--panel);
   }
-  .left {
-    border-right: 1px solid var(--border);
-  }
   .right {
-    border-left: 1px solid var(--border);
+    flex-direction: column;
+    overflow-y: auto;
   }
   .center {
     min-width: 0;
     min-height: 0;
   }
   .bottom {
-    border-top: 1px solid var(--border);
-    height: 200px;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .bottom > :global(.console) {
+    flex: 1;
     min-height: 0;
   }
   .status {
@@ -160,6 +236,9 @@
   }
   .console-toggle {
     flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
     font-size: 12px;
     color: #fff;
     background: transparent;

@@ -1,10 +1,13 @@
 /** Monaco bootstrap: core editor + contributions, one worker, PPL language. */
 import * as monaco from 'monaco-editor/editor';
 import './monaco-features';
+// Python syntax for .py files inside app folders (loaded on first use).
+import 'monaco-editor/languages/definitions/python/register';
 import EditorWorker from 'monaco-editor/editor/editor.worker?worker';
 import { KEYWORDS } from './lang/lexer';
 import { COMMANDS } from './lang/catalog';
 import { registerPplProviders } from './lang/providers';
+import { registerPythonProviders } from './lang/pythonProviders';
 import { registerDiagnostics } from './lang/diagnostics';
 
 self.MonacoEnvironment = {
@@ -52,6 +55,8 @@ monaco.languages.setMonarchTokensProvider(PPL, {
   tokenizer: {
     root: [
       [/\/\/.*$/, 'comment'],
+      // #PYTHON name() … #END: highlight the block as Python.
+      [/#[Pp][Yy][Tt][Hh][Oo][Nn]\b.*$/, { token: 'keyword.directive', next: '@python', nextEmbedded: 'python' }],
       [/#([Pp][Rr][Aa][Gg][Mm][Aa]|[Cc][Aa][Ss]|[Ee][Nn][Dd]).*$/, 'keyword.directive'],
       [/"/, 'string', '@string'],
       [/#[0-9A-Fa-f]+[hbodHBOD]?(:\d+)?/, 'number.hex'],
@@ -62,6 +67,9 @@ monaco.languages.setMonarchTokensProvider(PPL, {
       [/[()[\]{}]/, '@brackets'],
       [/[;,]/, 'delimiter'],
     ],
+    python: [
+      [/^\s*#[Ee][Nn][Dd]\b.*$/, { token: 'keyword.directive', next: '@pop', nextEmbedded: '@pop' }],
+    ],
     string: [
       [/[^"\\]+/, 'string'],
       [/\\./, 'string.escape'],
@@ -71,6 +79,7 @@ monaco.languages.setMonarchTokensProvider(PPL, {
 });
 
 registerPplProviders(monaco, PPL);
+registerPythonProviders(monaco);
 registerDiagnostics(monaco, PPL);
 
 monaco.editor.defineTheme('prime-dark', {
@@ -85,5 +94,20 @@ monaco.editor.defineTheme('prime-dark', {
   ],
   colors: {},
 });
+
+monaco.editor.defineTheme('prime-light', {
+  base: 'vs',
+  inherit: true,
+  rules: [
+    { token: 'keyword', foreground: 'AF00DB', fontStyle: 'bold' },
+    { token: 'keyword.directive', foreground: '0070C1' },
+    { token: 'operator.assign', foreground: '9A6700' },
+    { token: 'number.hex', foreground: '098658' },
+    { token: 'predefined', foreground: '795E26' },
+  ],
+  colors: {},
+});
+
+export const monacoTheme = (t: 'light' | 'dark') => (t === 'light' ? 'prime-light' : 'prime-dark');
 
 export { monaco };

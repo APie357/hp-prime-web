@@ -22,6 +22,14 @@
     }
   }
 
+  /** Handy raw messages and experiments. */
+  const presets: [string, string][] = [
+    ['FF', 'ready check'],
+    ['F2 01 00 00 00 02 00 00', 'clear Help• flag (verified on G2)'],
+    ['F2 03 00 00 00 02 00 00', 'empty chat, flag 03 (PrimeDev chat flag; untested)'],
+    ['F3 01 00 00 00 00', 'unknown opcode F3 (empty; untested)'],
+  ];
+
   const time = (t: number) => new Date(t).toLocaleTimeString([], { hour12: false });
 </script>
 
@@ -34,7 +42,10 @@
     </label>
     <label><input type="checkbox" bind:checked={app.verifyAfterSend} /> verify after send</label>
     <form class="raw" onsubmit={doRaw}>
-      <input bind:value={rawHex} placeholder="raw message hex" spellcheck="false" disabled={!app.connected} />
+      <input bind:value={rawHex} placeholder="raw message hex" spellcheck="false" list="raw-presets" disabled={!app.connected} />
+      <datalist id="raw-presets">
+        {#each presets as [bytes, label] (bytes)}<option value={bytes}>{label}</option>{/each}
+      </datalist>
       <label><input type="checkbox" bind:checked={expectReply} /> reply</label>
       <button type="submit" disabled={!app.connected || !!app.busy}>Send raw</button>
     </form>
@@ -101,22 +112,22 @@
     color: var(--muted);
   }
   .out .k {
-    color: #6fb3ff;
+    color: var(--info);
   }
   .in .k {
-    color: #8bd17c;
+    color: var(--ok);
   }
   .warn .x {
-    color: #e5c07b;
+    color: var(--warn);
   }
   .error .x {
-    color: #f07178;
+    color: var(--err);
   }
   .ok .x {
-    color: #8bd17c;
+    color: var(--ok);
   }
   .out .x,
   .in .x {
-    color: #a9b1c1;
+    color: var(--packet);
   }
 </style>

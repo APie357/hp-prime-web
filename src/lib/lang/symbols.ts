@@ -239,3 +239,10 @@ export function visibleAt(a: Analysis, line: number): Sym[] {
 export function findSymbol(a: Analysis, name: string, line: number): Sym | undefined {
   return visibleAt(a, line).find((s) => s.name === name);
 }
+
+/** The procedure Send & Run starts: the exported one named like the program, else the first exported one. */
+export function runTarget(programName: string, source: string): { name: string; params: string[] } | null {
+  const procs = analyze(source).procedures.filter((p) => p.exported);
+  const p = procs.find((x) => x.name === programName) ?? procs[0];
+  return p ? { name: p.name, params: p.params } : null;
+}

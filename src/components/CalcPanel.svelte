@@ -1,9 +1,42 @@
 <script lang="ts">
+  import Icon from './Icon.svelte';
   import type { TextKind } from '../lib/hid/session';
-  import { app, fetchObject, importObject, refreshCalcContents, syncClock } from '../lib/state.svelte';
+  import { appDisplayName, isSystemApp } from '../lib/files/app';
+  import {
+    app,
+    backupToZip,
+    clearChat,
+    clearHelp,
+    deleteCalcApp,
+    deleteCalcObject,
+    fetchApp,
+    fetchObject,
+    openCalcApp,
+    importObject,
+    refreshCalcContents,
+    restoreFromZip,
+    sendChatMessage,
+    syncClock,
+  } from '../lib/state.svelte';
 
   let fetchName = $state('');
-  let fetchKind = $state<TextKind>('program');
+  let fetchKind = $state<TextKind | 'app'>('program');
+  let chatText = $state('');
+  let chatLog = $state<HTMLOListElement>();
+
+  // Keep the newest message in view.
+  $effect(() => {
+    void app.chat.length;
+    if (chatLog) chatLog.scrollTop = chatLog.scrollHeight;
+  });
+  let restoreInput = $state<HTMLInputElement>();
+
+  function onRestorePick(e: Event) {
+    const input = e.currentTarget as HTMLInputElement;
+    const f = input.files?.[0];
+    input.value = '';
+    if (f) restoreFromZip(f);
+  }
 
   const programs = $derived(app.calcObjects.filter((o) => o.kind === 'program'));
   const notes = $derived(app.calcObjects.filter((o) => o.kind === 'note'));
@@ -32,22 +65,92 @@
         Sync clock
       </button>
     </div>
+    <div class="pad row">
+      <button onclick={backupToZip} disabled={!!app.busy} title="Download everything on the calculator as a .zip (full backup, ~20 s)">
+        Backup to .zip
+      </button>
+      <button
+        onclick={() => restoreInput?.click()}
+        disabled={!!app.busy}
+        title="Send the programs and notes from a backup .zip back to the calculator"
+      >
+        Restore…
+      </button>
+      <input bind:this={restoreInput} type="file" accept=".zip,application/zip" hidden onchange={onRestorePick} />
+    </div>
     <form
       class="pad row"
       onsubmit={(e) => {
         e.preventDefault();
-        fetchObject(fetchKind, fetchName);
+        if (fetchKind === 'app') fetchApp(fetchName);
+        else fetchObject(fetchKind, fetchName);
       }}
     >
       <select bind:value={fetchKind} aria-label="Object type">
         <option value="program">Program</option>
         <option value="note">Note</option>
+        <option value="app">App</option>
       </select>
       <input placeholder="Name" bind:value={fetchName} spellcheck="false" />
       <button type="submit" disabled={!!app.busy || !fetchName.trim()}>Fetch</button>
     </form>
 
+    <div class="chat">
+      <h3 class="pad">
+        Chat
+        {#if app.helpPending}
+          <button class="help-btn" onclick={clearHelp} disabled={!!app.busy} title="Turn off the Help• flag on the calculator">
+            <Icon name="back_hand" size={14} /> Clear help
+          </button>
+        {/if}
+        {#if app.chat.length}<button class="link" onclick={clearChat} title="Clear the chat log">clear</button>{/if}
+      </h3>
+      {#if app.chat.length}
+        <ol class="chat-log" bind:this={chatLog}>
+          {#each app.chat as line, i (i)}
+            <li class={line.dir} title={new Date(line.at).toLocaleTimeString()}>
+              <span class="who">{line.dir === 'in' ? 'Calc' : 'You'}</span>
+              {#if line.help}
+                <span class="text help"><Icon name="back_hand" size={14} /> asked for help</span>
+              {:else}
+                <span class="text">{line.text}</span>
+              {/if}
+            </li>
+          {/each}
+        </ol>
+      {/if}
+      <form
+        class="pad row"
+        onsubmit={async (e) => {
+          e.preventDefault();
+          if (await sendChatMessage(chatText)) chatText = '';
+        }}
+      >
+        <input placeholder="Message to calculator" bind:value={chatText} />
+        <button type="submit" disabled={!!app.busy || !chatText}>Send</button>
+      </form>
+    </div>
+
     <div class="lists">
+      <h3 class="pad">Apps {#if app.calcListedAt}<span class="muted">({app.calcApps.length})</span>{/if}</h3>
+      <ul>
+        {#each app.calcApps as a (a.name)}
+          <li>
+            <span class="name" title={a.name}>{appDisplayName(a.name)}</span>
+            <span class="muted size" title="Based on">{isSystemApp(a.name) ? 'built-in' : a.base}</span>
+            <button onclick={() => openCalcApp(a.name)} title="Copy into the workspace and open">Open</button>
+            <button
+              class="danger"
+              onclick={() => deleteCalcApp(a.name)}
+              disabled={!!app.busy || isSystemApp(a.name)}
+              title={isSystemApp(a.name) ? 'Built-in apps can’t be deleted' : 'Delete from the calculator'}
+              aria-label="Delete app {a.name} from the calculator"><Icon name="delete" /></button
+            >
+          </li>
+        {:else}
+          <li class="muted">{app.calcListedAt ? 'No apps' : 'Click “List contents” to read them'}</li>
+        {/each}
+      </ul>
       {#each [{ title: 'Programs', items: programs, kind: 'program' }, { title: 'Notes', items: notes, kind: 'note' }] as group (group.kind)}
         <h3 class="pad">{group.title} {#if app.calcListedAt}<span class="muted">({group.items.length})</span>{/if}</h3>
         <ul>
@@ -57,6 +160,12 @@
               {#if o.formatted}<span class="muted tag" title="Has rich-text formatting; only the plain text is edited">rich</span>{/if}
               <span class="muted size">{o.text.length} ch</span>
               <button onclick={() => importObject(o.kind, o.name, o.text)} title="Copy into workspace and open">Open</button>
+              <button
+                class="danger"
+                onclick={() => deleteCalcObject(o.kind, o.name)}
+                disabled={!!app.busy}
+                title="Delete from the calculator"
+                aria-label="Delete {o.name} from the calculator"><Icon name="delete" /></button>
             </li>
           {:else}
             <li class="muted">{app.calcListedAt ? `No ${group.title.toLowerCase()}` : 'Click “List contents” to read them'}</li>
@@ -84,8 +193,8 @@
     font: inherit;
     font-size: 13px;
     color: var(--fg);
-    background: #3c3c3c;
-    border: 1px solid #4a4d52;
+    background: var(--input-bg);
+    border: 1px solid var(--input-border);
     border-radius: 4px;
   }
   dl {
@@ -140,5 +249,71 @@
   li button {
     font-size: 12px;
     padding: 1px 8px;
+  }
+  li button.danger {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 4px;
+  }
+  .chat-log {
+    max-height: 140px;
+    overflow: auto;
+    padding: 0 0 4px;
+  }
+  .chat-log li {
+    align-items: baseline;
+    padding: 1px 10px;
+  }
+  .chat-log .who {
+    flex: none;
+    width: 34px;
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .chat-log li.in .who {
+    color: var(--teal);
+  }
+  .chat-log .text {
+    flex: 1;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+    font-family: var(--mono);
+  }
+  .chat-log .help {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-family: inherit;
+    font-style: italic;
+    color: var(--hl);
+  }
+  h3 .help-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    margin-left: 8px;
+    font-size: 11px;
+    padding: 0 6px;
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--hl);
+    border-color: var(--hl);
+  }
+  h3 .link {
+    float: right;
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: none;
+    cursor: pointer;
+  }
+  h3 .link:hover {
+    color: var(--fg);
+  }
+  li button.danger:hover:not(:disabled) {
+    color: var(--err);
+    border-color: var(--err);
   }
 </style>

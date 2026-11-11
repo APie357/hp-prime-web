@@ -57,6 +57,28 @@ export function lex(src: string): Token[] {
       push('comment', s, i);
       continue;
     }
+    // #PYTHON name() … #END: embedded Python, kept as one directive token (lines included) so the
+    // PPL analysis skips it. The block ends at a line starting with #END (or the end of the text).
+    if (c === '#' && /^#python\b/i.test(src.slice(i, i + 8))) {
+      const s = i;
+      const startLine = line;
+      const startCol = s - lineStart + 1;
+      while (i < src.length && src[i] !== '\n') i++;
+      for (;;) {
+        if (i >= src.length) break;
+        // At a newline: look at the next line.
+        i++;
+        line++;
+        lineStart = i;
+        let e = i;
+        while (e < src.length && src[e] !== '\n') e++;
+        i = e;
+        if (/^[ \t]*#end\b/i.test(src.slice(lineStart, e))) break;
+      }
+      const text = src.slice(s, i);
+      toks.push({ type: 'pragma', text, upper: text.toUpperCase(), start: s, end: i, line: startLine, col: startCol });
+      continue;
+    }
     // #pragma / #cas directives
     if (c === '#' && /^#(pragma|cas|end)/i.test(src.slice(i, i + 7))) {
       const s = i;

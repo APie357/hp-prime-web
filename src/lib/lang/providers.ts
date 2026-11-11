@@ -11,6 +11,7 @@ import {
 } from './catalog';
 import { analyze, findSymbol, visibleAt, type Analysis, type Sym } from './symbols';
 import { formatPpl } from './format';
+import { pyCompletionItems, pyHover, pySignatureHelp, pythonRegion } from './pythonProviders';
 
 const analysisCache = new WeakMap<object, { version: number; analysis: Analysis }>();
 
@@ -171,8 +172,12 @@ export function minimalEdit(before: string, after: string): { start: number; end
 
 export function registerPplProviders(monaco: typeof Monaco, languageId: string): void {
   monaco.languages.registerCompletionItemProvider(languageId, {
-    triggerCharacters: ['_'],
-    provideCompletionItems(model, position) {
+    triggerCharacters: ['_', '.'],
+    provideCompletionItems(model, position, context) {
+      // Inside #PYTHON … #END: Python completion instead.
+      const py = pythonRegion(model, position);
+      if (py) return pyCompletionItems(monaco, model, position, py);
+      if (context.triggerCharacter === '.') return { suggestions: [] };
       const line = model.getLineContent(position.lineNumber);
       if (inStringOrComment(line, position.column)) return { suggestions: [] };
       const w = wordAt(line, position.column);
@@ -234,6 +239,8 @@ export function registerPplProviders(monaco: typeof Monaco, languageId: string):
 
   monaco.languages.registerHoverProvider(languageId, {
     provideHover(model, position) {
+      const py = pythonRegion(model, position);
+      if (py) return pyHover(model, position, py);
       const line = model.getLineContent(position.lineNumber);
       if (inStringOrComment(line, position.column)) return null;
       const w = wordAt(line, position.column);
@@ -257,6 +264,8 @@ export function registerPplProviders(monaco: typeof Monaco, languageId: string):
     signatureHelpTriggerCharacters: ['(', ','],
     signatureHelpRetriggerCharacters: [','],
     provideSignatureHelp(model, position) {
+      const py = pythonRegion(model, position);
+      if (py) return pySignatureHelp(model, py);
       // Limit the scan to a window before the cursor; calls do not span thousands of lines.
       const startLine = Math.max(1, position.lineNumber - 200);
       const text = model.getValueInRange({

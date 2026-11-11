@@ -14,7 +14,7 @@ import { utf16le } from '../hid/bytes';
 
 export interface DecodedNote {
   text: string;
-  /** The note carries a rich-text section (bold, colours, …). */
+  /** The note carries a rich-text section (bold, colors, …). */
   formatted: boolean;
 }
 

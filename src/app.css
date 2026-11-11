@@ -6,12 +6,78 @@
   --muted: #8b8f98;
   --accent: #4fa3ff;
   --sel: #37373d;
+  --input-bg: #3c3c3c;
+  --input-border: #4a4d52;
+  --btn-bg: #3a3d41;
+  --btn-hover: #45494e;
+  --hover: #ffffff1a;
+  --ok: #8bd17c;
+  --err: #e07b7b;
+  --warn: #e5c07b;
+  --info: #6fb3ff;
+  --hl: #dcdcaa;
+  --teal: #4ec9b0;
+  --focus: #4c8dd8;
+  --packet: #a9b1c1;
+  --splitter: #4fa3ff66;
   --mono: ui-monospace, 'JetBrains Mono', 'Cascadia Code', Menlo, Consolas, monospace;
   color-scheme: dark;
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   font-size: 14px;
   color: var(--fg);
   background: var(--bg);
+}
+
+/* Light theme: chosen explicitly, or by the system when the setting is Auto. */
+:root[data-theme='light'] {
+  --bg: #ffffff;
+  --panel: #f3f3f5;
+  --border: #d4d4d8;
+  --fg: #1f2328;
+  --muted: #646a73;
+  --accent: #0b6bcb;
+  --sel: #dde3ec;
+  --input-bg: #ffffff;
+  --input-border: #c3c6cc;
+  --btn-bg: #e9eaee;
+  --btn-hover: #dcdee3;
+  --hover: #0000000f;
+  --ok: #2e7d32;
+  --err: #c62828;
+  --warn: #946200;
+  --info: #1565c0;
+  --hl: #7a5d00;
+  --teal: #00796b;
+  --focus: #0b6bcb;
+  --packet: #57606a;
+  --splitter: #0b6bcb55;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    --bg: #ffffff;
+    --panel: #f3f3f5;
+    --border: #d4d4d8;
+    --fg: #1f2328;
+    --muted: #646a73;
+    --accent: #0b6bcb;
+    --sel: #dde3ec;
+    --input-bg: #ffffff;
+    --input-border: #c3c6cc;
+    --btn-bg: #e9eaee;
+    --btn-hover: #dcdee3;
+    --hover: #0000000f;
+    --ok: #2e7d32;
+    --err: #c62828;
+    --warn: #946200;
+    --info: #1565c0;
+    --hl: #7a5d00;
+    --teal: #00796b;
+    --focus: #0b6bcb;
+    --packet: #57606a;
+    --splitter: #0b6bcb55;
+    color-scheme: light;
+  }
 }
 
 * {
@@ -31,14 +97,14 @@ input {
 }
 
 button {
-  background: #3a3d41;
-  border: 1px solid #4a4d52;
+  background: var(--btn-bg);
+  border: 1px solid var(--input-border);
   border-radius: 4px;
   padding: 3px 10px;
   cursor: pointer;
 }
 button:hover:not(:disabled) {
-  background: #45494e;
+  background: var(--btn-hover);
 }
 button:disabled {
   opacity: 0.45;
@@ -54,8 +120,8 @@ button.primary:hover:not(:disabled) {
 }
 
 input:not([type='checkbox']) {
-  background: #3c3c3c;
-  border: 1px solid #4a4d52;
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
   border-radius: 4px;
   padding: 3px 6px;
 }

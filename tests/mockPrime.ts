@@ -1,6 +1,6 @@
 /**
  * A simulated calculator speaking legacy framing, for session tests.
- * Mirrors observed G2 behaviour: 'Y' ready reply, silent F7, F8 silent for
+ * Mirrors observed G2 behavior: 'Y' ready reply, silent F7, F8 silent for
  * missing objects, NUL-terminated stored program text.
  */
 import { concat, fromUtf16le, utf16le } from '../src/lib/hid/bytes';
@@ -25,6 +25,10 @@ export class MockPrime implements ReportPort {
   objects = new Map<string, Uint8Array>();
   sentKeys: number[][] = [];
   clockSets: number[][] = [];
+  deleted: string[] = [];
+  chats: string[] = [];
+  /** Interleave this chat message ahead of the next ready reply. */
+  chatBeforeReply = '';
   refuseWrites = false;
 
   constructor(readonly reportSize = 1024) {
@@ -45,6 +49,22 @@ export class MockPrime implements ReportPort {
     return this.q.drain();
   }
 
+  cancelRead() {
+    this.q.abort();
+  }
+
+  /** The calculator's own Send key (Apps, Program Catalog, Notes): an unprompted F7. */
+  sendObject(type: number, name: string, data: Uint8Array) {
+    this.reply(C.sendFile(type, name, data));
+  }
+  /** Interleave this object ahead of the next ready reply. */
+  objectBeforeReply: [number, string, Uint8Array] | null = null;
+
+  /** The calculator sends a chat message on its own (Chat app → send). */
+  say(text: string) {
+    this.reply(C.withLengthHeader(C.CMD.CHAT, concat(utf16le(text), [0, 0])));
+  }
+
   private reply(msg: Uint8Array) {
     for (const r of this.framing.fragment(msg)) {
       const padded = new Uint8Array(this.reportSize);
@@ -56,6 +76,14 @@ export class MockPrime implements ReportPort {
   private handle(msg: Uint8Array) {
     switch (msg[0]) {
       case C.CMD.READY:
+        if (this.objectBeforeReply) {
+          this.sendObject(...this.objectBeforeReply);
+          this.objectBeforeReply = null;
+        }
+        if (this.chatBeforeReply) {
+          this.say(this.chatBeforeReply);
+          this.chatBeforeReply = '';
+        }
         return this.reply(Uint8Array.of(C.READY_REPLY));
       case C.CMD.INFO:
         return this.reply(C.withLengthHeader(0xfa, concat([0, 0], utf16le('Mock Prime'), [0, 0], utf16le('V2.060.650'), [0, 0], utf16le('SN12345678'))));
@@ -71,7 +99,9 @@ export class MockPrime implements ReportPort {
         const name = fromUtf16le(msg.subarray(10, 10 + nameLen));
         const data = this.objects.get(`${type}:${name}`);
         if (data === undefined) return; // silent
-        return this.reply(C.sendFile(type, name, concat(data, [0, 0])));
+        // Programs and notes come back with a UTF-16 NUL appended (as on the G2); other objects as stored.
+        const body = type === C.ObjType.PROGRAM || type === C.ObjType.NOTE ? concat(data, [0, 0]) : data;
+        return this.reply(C.sendFile(type, name, body));
       }
       case C.CMD.BACKUP: {
         for (const [key, data] of this.objects) {
@@ -80,6 +110,16 @@ export class MockPrime implements ReportPort {
         }
         return this.reply(Uint8Array.of(0xf9, 0x01, 0, 0, 0, 0));
       }
+      case C.CMD.DELETE: {
+        const f = parseNamed(msg);
+        this.deleted.push(`${f.type}:${f.name}`);
+        if (this.refuseWrites) return this.reply(Uint8Array.of(0xf9, 0x01, 0, 0, 0, 0));
+        this.objects.delete(`${f.type}:${f.name}`);
+        return; // silent (real reply unknown)
+      }
+      case C.CMD.CHAT:
+        this.chats.push(fromUtf16le(msg.subarray(6)));
+        return;
       case C.CMD.SET_TIME:
         this.clockSets.push(Array.from(msg.subarray(6)));
         return; // silent
@@ -88,4 +128,9 @@ export class MockPrime implements ReportPort {
         return;
     }
   }
+}
+
+/** Type and name of an F7/F8/EB named-object message. */
+function parseNamed(msg: Uint8Array): { type: number; name: string } {
+  return { type: msg[6], name: fromUtf16le(msg.subarray(10, 10 + msg[7])) };
 }

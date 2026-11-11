@@ -2,11 +2,12 @@
  * PrimeSession — the request/response layer on top of a ReportPort.
  * All operations are serialized: the Prime link is strictly half-duplex.
  */
-import { fromUtf16le, utf16le, hex } from './bytes';
+import { bytesEqual, fromUtf16le, utf16le, hex } from './bytes';
 import * as C from './commands';
-import { LegacyFraming, type LinkFraming } from './framing';
+import { LegacyFraming, type LinkFraming, type Reassembler } from './framing';
 import { log } from './log';
 import {
+  parseChat,
   parseFileMessage,
   parseInfo,
   parseScreenMessage,
@@ -65,6 +66,26 @@ export function isValidName(kind: TextKind, name: string): boolean {
   return kind === 'program' ? C.isValidProgramName(name) : C.isValidNoteName(name);
 }
 
+/** How `pressKeys` encodes key presses; see there. */
+export type KeyMode = 'single' | 'batch' | 'release' | 'ready';
+export const KEY_MODES: KeyMode[] = ['single', 'batch', 'release', 'ready'];
+
+export interface SendAppResult {
+  name: string;
+  bytes: number;
+  refused: boolean;
+  /** Byte-for-byte comparison; callers can compare `readback` more loosely (see files/app.ts). */
+  verified: 'match' | 'mismatch' | 'no-reply' | 'skipped';
+  readback?: Uint8Array;
+}
+
+export interface DeleteResult {
+  /** The calculator answered with an F9 (refusal) frame. */
+  refused: boolean;
+  /** An F8 probe afterwards got no reply, so the object is gone. */
+  gone: boolean;
+}
+
 export interface BackupProgress {
   count: number;
   last?: PrimeFile;
@@ -74,16 +95,110 @@ export class PrimeSession {
   readonly framing: LinkFraming;
   private chain: Promise<unknown> = Promise.resolve();
   timeouts: Timeouts = { ...DEFAULT_TIMEOUTS };
+  /** Called for objects (F7) the calculator sends on its own: its Send key in Apps, Program Catalog, Notes. */
+  onObject?: (file: PrimeFile) => void;
+  /** True while an operation is waiting for an F7 (F8 fetch, backup); other F7s are unsolicited. */
+  private expectFile = false;
+  /** Called for chat (F2) messages the calculator sends on its own. "" = the Messages app's Help key. */
+  onChat?: (text: string) => void;
+  /** Operations queued or running (excluding the idle listener). */
+  private waiting = 0;
+  private listening = false;
+  private idleRead = false;
+  private idleLoop: Promise<void> | null = null;
+  private idleRe: Reassembler;
 
   constructor(readonly port: ReportPort, framing?: LinkFraming) {
     this.framing = framing ?? new LegacyFraming(port.reportSize - 1);
+    this.idleRe = this.framing.createReassembler();
   }
 
   /** Run `fn` exclusively (queued behind any in-flight operation). */
   private exclusive<T>(fn: () => Promise<T>): Promise<T> {
-    const run = this.chain.then(fn, fn);
+    this.waiting++;
+    // Make the idle listener give up the link, unless it is mid-way through a message.
+    if (this.idleRead && !this.idleRe.pending) this.port.cancelRead?.();
+    const run = this.chain.then(fn, fn).finally(() => this.waiting--);
     this.chain = run.catch(() => undefined);
     return run;
+  }
+
+  /**
+   * Listen for messages the calculator sends unprompted (chat) while no operation is running.
+   * Without this, they sit in the queue until the next operation drains them as stale.
+   */
+  listen(on = true): void {
+    this.listening = on;
+    if (!on) {
+      if (this.idleRead) this.port.cancelRead?.();
+      return;
+    }
+    this.idleLoop ??= this.runIdle().finally(() => {
+      this.idleLoop = null;
+    });
+  }
+
+  private async runIdle(): Promise<void> {
+    while (this.listening) {
+      if (this.waiting) {
+        await this.chain;
+        continue;
+      }
+      const turn = this.chain.then(() => this.idleStep());
+      this.chain = turn.catch(() => undefined);
+      await this.chain;
+    }
+  }
+
+  private async idleStep(): Promise<void> {
+    if (this.waiting || !this.listening) return;
+    this.idleRead = true;
+    let r: Uint8Array | null;
+    try {
+      r = await this.port.read(this.idleRe.pending ? this.timeouts.between : 1000);
+    } finally {
+      this.idleRead = false;
+    }
+    if (!r) {
+      if (this.idleRe.pending && !this.waiting) {
+        log('warn', 'unsolicited message was cut off');
+        this.idleRe.reset();
+      }
+      return;
+    }
+    try {
+      const msg = this.idleRe.push(r);
+      if (msg) this.unsolicited(msg);
+    } catch (e) {
+      log('warn', `unsolicited data: ${(e as Error).message}`);
+    }
+  }
+
+  /** Handle a message nobody asked for. Returns true when it was one (so callers keep waiting). */
+  private unsolicited(msg: Uint8Array): boolean {
+    if (msg[0] === C.CMD.CHAT) {
+      try {
+        const text = parseChat(msg);
+        log('info', text ? `chat from calculator: ${text}` : 'calculator pressed Help in Messages (empty chat message)');
+        this.onChat?.(text);
+      } catch (e) {
+        log('warn', `bad chat message: ${(e as Error).message}`);
+      }
+      return true;
+    }
+    if (msg[0] === C.CMD.FILE) {
+      try {
+        const f = parseFileMessage(msg);
+        if (!f.crcOk) log('warn', `CRC mismatch on ${f.name} sent by the calculator`);
+        log('info', `calculator sent ${C.OBJ_TYPE_NAMES[f.type] ?? `type ${f.type}`} "${f.name}" (${f.data.length} B)`);
+        this.onObject?.(f);
+      } catch (e) {
+        log('warn', `bad object from calculator: ${(e as Error).message}`);
+      }
+      return true;
+    }
+    log('warn', `unsolicited message: ${hex(msg, 16)}`);
+    return false;
   }
 
   private async sendMessage(msg: Uint8Array): Promise<void> {
@@ -96,6 +211,9 @@ export class PrimeSession {
       const r = await this.port.read(re.pending ? this.timeouts.between : firstTimeout);
       if (!r) throw new TimeoutError(what);
       const msg = re.push(r);
+      // Chat, or an object from the calculator's Send key, can arrive ahead of the reply we wait for.
+      if (msg && msg[0] === C.CMD.CHAT && this.unsolicited(msg)) continue;
+      if (msg && msg[0] === C.CMD.FILE && !this.expectFile && this.unsolicited(msg)) continue;
       if (msg) return msg;
     }
   }
@@ -139,6 +257,7 @@ export class PrimeSession {
   }
 
   private async requestFileUnlocked(type: number, name: string, timeoutMs: number): Promise<PrimeFile | null> {
+    this.expectFile = true;
     try {
       const r = await this.exchange(C.requestFile(type, name), `file ${name}`, timeoutMs);
       if (r[0] !== C.CMD.FILE) throw new Error(`unexpected reply to F8: ${hex(r, 12)}`);
@@ -148,11 +267,13 @@ export class PrimeSession {
     } catch (e) {
       if (e instanceof TimeoutError) return null;
       throw e;
+    } finally {
+      this.expectFile = false;
     }
   }
 
   /**
-   * F7. Current firmware sends no acknowledgement, so silence is success;
+   * F7. Current firmware sends no acknowledgment, so silence is success;
    * an F9 frame means the calculator refused.
    */
   sendFile(type: number, name: string, content: Uint8Array): Promise<{ refused: boolean }> {
@@ -221,41 +342,128 @@ export class PrimeSession {
       this.port.drain();
       await this.sendMessage(C.requestBackup());
       const files: PrimeFile[] = [];
-      for (;;) {
-        let msg: Uint8Array;
-        try {
-          msg = await this.recvMessage('backup data', files.length ? 5000 : 10000);
-        } catch (e) {
-          if (e instanceof TimeoutError && files.length) {
-            log('warn', 'backup stream went quiet; assuming complete');
-            break;
+      this.expectFile = true;
+      try {
+        for (;;) {
+          let msg: Uint8Array;
+          try {
+            msg = await this.recvMessage('backup data', files.length ? 5000 : 10000);
+          } catch (e) {
+            if (e instanceof TimeoutError && files.length) {
+              log('warn', 'backup stream went quiet; assuming complete');
+              break;
+            }
+            throw e;
           }
-          throw e;
+          if (msg[0] === C.CMD.BACKUP) break;
+          if (msg[0] !== C.CMD.FILE) {
+            log('warn', `unexpected message in backup: ${hex(msg, 12)}`);
+            continue;
+          }
+          try {
+            const f = parseFileMessage(msg);
+            files.push(f);
+            onProgress?.({ count: files.length, last: f });
+          } catch (e) {
+            log('error', `bad file in backup: ${(e as Error).message}`);
+          }
         }
-        if (msg[0] === C.CMD.BACKUP) break;
-        if (msg[0] !== C.CMD.FILE) {
-          log('warn', `unexpected message in backup: ${hex(msg, 12)}`);
-          continue;
-        }
-        try {
-          const f = parseFileMessage(msg);
-          files.push(f);
-          onProgress?.({ count: files.length, last: f });
-        } catch (e) {
-          log('error', `bad file in backup: ${(e as Error).message}`);
-        }
+      } finally {
+        this.expectFile = false;
       }
       return files;
     });
   }
 
-  /** EC — fire-and-forget; firmware sends no acknowledgement. */
+  /**
+   * Send an app (type 02 payload, see files/app.ts) and read it back with F8 to verify.
+   * `name` is the calculator name (`&` prefix for built-in apps).
+   */
+  sendApp(name: string, payload: Uint8Array, verify = true): Promise<SendAppResult> {
+    return this.exclusive(async () => {
+      const { refused } = await this.sendFileUnlocked(C.ObjType.APP, name, payload);
+      const res: SendAppResult = { name, bytes: payload.length, refused, verified: 'skipped' };
+      if (refused || !verify) return res;
+      await sleep(400);
+      const back = await this.requestFileUnlocked(C.ObjType.APP, name, 5000);
+      if (!back) res.verified = 'no-reply';
+      else {
+        res.readback = back.data;
+        res.verified = sameIgnoringTrailingZeros(back.data, payload) ? 'match' : 'mismatch';
+      }
+      return res;
+    });
+  }
+
+  /** F8 for an app; null when the calculator stays silent. */
+  readApp(name: string, timeoutMs = 5000): Promise<PrimeFile | null> {
+    return this.requestFile(C.ObjType.APP, name, timeoutMs);
+  }
+
+  /**
+   * EB — delete one named object, then probe with F8 to confirm it is gone.
+   * The reply to EB is undocumented: an F9 frame is treated as a refusal, anything else
+   * (or silence) is logged, and the F8 probe decides.
+   */
+  deleteObject(type: number, name: string): Promise<DeleteResult> {
+    return this.exclusive(async () => {
+      let refused = false;
+      try {
+        const r = await this.exchange(C.deleteObject(type, name), 'delete reply', 1500);
+        if (r[0] === C.CMD.BACKUP) refused = true;
+        else log('info', `EB reply: ${hex(r, 12)}`);
+      } catch (e) {
+        if (!(e instanceof TimeoutError)) throw e;
+      }
+      if (refused) return { refused, gone: false };
+      await sleep(250);
+      const still = await this.requestFileUnlocked(type, name, 1500);
+      return { refused, gone: !still };
+    });
+  }
+
+  /** EC — fire-and-forget; firmware sends no acknowledgment. */
   sendKeys(codes: number[]): Promise<void> {
     return this.exclusive(() => this.sendMessage(C.sendKeys(codes)));
   }
 
+  /**
+   * Press keys with `EC` (layout as in hplp: `EC 01 len(u32BE) codes…`). On the G2 a plain key is
+   * queued but not processed until a physical key press, so `mode` selects experimental variants:
+   * - `single`: one message per key, with `gapMs` between them
+   * - `batch`: every key in one message
+   * - `release`: one message per key carrying the code and then code | 0x80 (a guessed key-up)
+   * - `ready`: like `single`, then a ready check, in case a reply round-trip wakes the UI
+   * The whole sequence holds the link, so a screenshot poll can't interleave with it.
+   */
+  pressKeys(codes: number[], mode: KeyMode = 'single', gapMs = 80): Promise<void> {
+    return this.exclusive(async () => {
+      if (mode === 'batch') {
+        await this.sendMessage(C.sendKeys(codes));
+        return;
+      }
+      for (let i = 0; i < codes.length; i++) {
+        if (i) await sleep(gapMs);
+        const c = codes[i];
+        await this.sendMessage(C.sendKeys(mode === 'release' ? [c, c | 0x80] : [c]));
+      }
+      if (mode === 'ready') {
+        try {
+          await this.exchange(C.checkReady(), 'ready reply', 1000);
+        } catch (e) {
+          if (!(e instanceof TimeoutError)) throw e;
+        }
+      }
+    });
+  }
+
   sendChat(text: string): Promise<void> {
     return this.exclusive(() => this.sendMessage(C.sendChat(text)));
+  }
+
+  /** Clear the Help• flag the Messages app's Help key sets. */
+  clearHelp(): Promise<void> {
+    return this.exclusive(() => this.sendMessage(C.clearHelp()));
   }
 
   /**
@@ -293,6 +501,12 @@ export class PrimeSession {
       }
     });
   }
+}
+
+/** Equal, allowing extra zero bytes at the end of `got` (the calculator pads some replies). */
+function sameIgnoringTrailingZeros(got: Uint8Array, want: Uint8Array): boolean {
+  if (got.length < want.length || !bytesEqual(got.subarray(0, want.length), want)) return false;
+  return got.subarray(want.length).every((b) => b === 0);
 }
 
 /** Line endings → "\n", strip BOM. */
