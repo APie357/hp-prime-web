@@ -121,11 +121,34 @@ export class FolderWorkspace implements Workspace {
     const [td] = split(to);
     const h = (await this.file(from)) as FileSystemFileHandle & { move?: (name: string) => Promise<void> };
     if (h.move && fd === td) {
-      await h.move(split(to)[1]);
+      try {
+        await h.move(split(to)[1]);
+        return;
+      } catch (e) {
+        // Some browsers expose move() for files but refuse it (NotSupportedError); copy instead.
+        if (!(e instanceof DOMException && e.name === 'NotSupportedError')) throw e;
+      }
+    }
+    await this.copyThenRemove(from, to);
+  }
+
+  /**
+   * Rename by copying. A case-only rename (`a.txt` → `A.txt`) goes through a temporary name:
+   * on a case-insensitive file system both names are the same file, so deleting the old one
+   * would delete the new one too.
+   */
+  private async copyThenRemove(from: string, to: string): Promise<void> {
+    const data = await this.readBytes(from);
+    if (from.toLowerCase() !== to.toLowerCase()) {
+      await this.writeBytes(to, data);
+      await this.remove(from);
       return;
     }
-    await this.writeBytes(to, await this.readBytes(from));
+    const tmp = `${from}.renaming-${Date.now()}`;
+    await this.writeBytes(tmp, data);
     await this.remove(from);
+    await this.writeBytes(to, data);
+    await this.remove(tmp);
   }
 
   async stat(path: string): Promise<number | null> {
