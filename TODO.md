@@ -82,6 +82,7 @@ Built 2026-11-10; not yet tried in a browser (no headless Chromium on the dev ma
 - [x] Resizable file list, calculator panel and console (drag the edges, arrow keys when focused, double-click to reset); sizes remembered
 - [x] Light theme: ◐/☀/☾ button cycles Auto (follows the system) → Light → Dark; Monaco follows; the keypad stays calculator-colored
 - [ ] Try all of the above in Chrome
+- [ ] **Bug:** renaming an exam configuration (`.hpexammode`) in a folder workspace fails with "Rename failed: Failed to execute 'move' on 'FileSystemFileHandle': The implementation did not support the requested type of object or operation." `FolderWorkspace.rename` calls `FileSystemFileHandle.move()` whenever the browser has it and doesn't fall back. Fix: on `NotSupportedError`, copy then delete. A case-only rename must go through a temporary name, so the delete can't remove the new file on a case-insensitive file system. Check whether program and note renames hit the same error.
 
 ## 5. Build / infra
 - [ ] Shrink the Monaco bundle (currently about 4 MB; `register.all` pulls in every contribution)
