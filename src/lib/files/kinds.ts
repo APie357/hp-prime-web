@@ -94,6 +94,16 @@ export function decodeTextFor(path: string, bytes: Uint8Array): string {
   }
 }
 
+/**
+ * Text of an imported file: UTF-8, or UTF-16LE when it has a UTF-16 BOM or looks like UTF-16
+ * (the Connectivity Kit writes UTF-16). BOM and trailing NULs dropped, line endings → `\n`.
+ */
+export function decodeTextFile(b: Uint8Array): string {
+  const utf16 = (b[0] === 0xff && b[1] === 0xfe) || (b.length >= 4 && b[1] === 0 && b[3] === 0 && b[0] !== 0);
+  const t = utf16 ? new TextDecoder('utf-16le').decode(b) : new TextDecoder().decode(b);
+  return t.replace(/^\uFEFF/, '').replace(/\0+$/, '').replace(/\r\n?/g, '\n');
+}
+
 /** What the "New…" dialog creates. */
 export type NewKind = FileKind | 'app';
 

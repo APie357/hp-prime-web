@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decodeTextFor, encodeTextFor, fileType, languageFor, parseNewName, programNameFromFile } from '../src/lib/files/kinds';
+import { decodeTextFile, decodeTextFor, encodeTextFor, fileType, languageFor, parseNewName, programNameFromFile } from '../src/lib/files/kinds';
 
 describe('workspace file kinds', () => {
   it('classifies top-level and app files', () => {
@@ -36,5 +36,14 @@ describe('parseNewName', () => {
   it('leaves other names alone', () => {
     expect(parseNewName('NEWPROG')).toEqual({ name: 'NEWPROG', kind: null });
     expect(parseNewName('v1.2')).toEqual({ name: 'v1.2', kind: null });
+  });
+});
+
+describe('decodeTextFile', () => {
+  const utf16 = (s: string) => Uint8Array.from([...s].flatMap((c) => [c.charCodeAt(0) & 0xff, c.charCodeAt(0) >> 8]));
+  it('reads UTF-8 and UTF-16LE (with or without a BOM), normalizing line endings', () => {
+    expect(decodeTextFile(new TextEncoder().encode('A:=1;\r\nB▶x;'))).toBe('A:=1;\nB▶x;');
+    expect(decodeTextFile(utf16('﻿EXPORT X()\r\nBEGIN\0'))).toBe('EXPORT X()\nBEGIN');
+    expect(decodeTextFile(utf16('EXPORT X()\n'))).toBe('EXPORT X()\n');
   });
 });

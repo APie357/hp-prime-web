@@ -1,6 +1,6 @@
 /** Application state and actions shared by the components. */
 import { log } from './hid/log';
-import { askConfirm, askText } from './dialogs.svelte';
+import { askChoice, askConfirm, askText } from './dialogs.svelte';
 import { ui } from './ui.svelte';
 import { decodeText, isValidName, KEY_MODES, KIND_TYPE, PrimeSession, type KeyMode, type TextKind } from './hid/session';
 import type { PrimeFile } from './hid/parsers';
@@ -31,7 +31,7 @@ import {
   noneBag,
   parseAppPayload,
 } from './files/app';
-import { BinaryFileError, fileType, languageFor } from './files/kinds';
+import { BinaryFileError, decodeTextFile, fileType, languageFor } from './files/kinds';
 import { EXAM_SAMPLE_SIZE, examFileFor, examName, isValidExamName, withExamName } from './files/exam';
 import { ICON_FILE, ICON_SIZE, makeAppIcon, pickImage, type IconResult } from './files/icon';
 import { setLocalModuleSource } from './lang/pythonProviders';
@@ -484,8 +484,15 @@ export async function fetchObject(kind: TextKind, name: string): Promise<void> {
 
 /** Put a calculator program or note into the workspace and open it. */
 export async function importObject(kind: TextKind, name: string, text: string, from = 'Calculator'): Promise<void> {
+  await importText(fileFor(kind, name), text, from);
+}
+
+/**
+ * Write text into the workspace at `file` and open it. When a different local version exists,
+ * a diff asks which to keep (`from` labels the incoming side).
+ */
+async function importText(file: string, text: string, from: string): Promise<void> {
   const ws = await ensureWorkspace();
-  const file = fileFor(kind, name);
   if (await ws.exists(file)) {
     const local = app.current === file ? editorBridge.getText(file) : await ws.read(file);
     if (local !== null && local.replace(/\r\n?/g, '\n') !== text.replace(/\r\n?/g, '\n')) {
@@ -516,39 +523,169 @@ export async function importObject(kind: TextKind, name: string, text: string, f
 
 // ------------------------------------------------------------- .hpprgm
 
+/** File types the Import button takes (exam configurations only with the setting on). */
+export function importAccept(): string {
+  return (ui.hpprgm ? '.hpprgm,' : '') + '.hpppl,.ppl,.txt,.py,.hpapp,.hpappprgm,.hpappnote' + (ui.examMode ? ',.hpexammode' : '');
+}
+
+const APP_PART = /\.(hpapp|hpappprgm|hpappnote)$/i;
+const stem = (f: string) => f.replace(/\.[^.]*$/, '');
+
+/** Ask for a valid name when `name` isn't one. Resolves null when canceled. */
+async function validNameFor(file: string, name: string, kind: string, valid: (v: string) => boolean, hint: string) {
+  if (valid(name)) return name;
+  return askText(`"${name}" isn't a valid ${kind} name. Name for ${file}:`, name.replace(/[^A-Za-z0-9_ ]/g, '_'), {
+    title: `Import ${kind}`,
+    okLabel: 'Import',
+    validate: (v) => (valid(v) ? null : hint),
+  });
+}
+
+/** Write raw bytes, asking first when a different file is already there. Resolves false if skipped. */
+async function importBytes(path: string, data: Uint8Array, from: string): Promise<boolean> {
+  const ws = await ensureWorkspace();
+  if (await ws.exists(path)) {
+    const local = await ws.readBytes(path);
+    if (local.length === data.length && local.every((b, i) => b === data[i])) return true;
+    const ok = await askConfirm(`${path} already exists in the workspace and differs from ${from}. Replace it?`, {
+      title: 'Replace workspace file?',
+      okLabel: 'Replace',
+      danger: true,
+    });
+    if (!ok) return false;
+  }
+  writing.add(path);
+  try {
+    await ws.writeBytes(path, data);
+    const t = await ws.stat(path);
+    if (t !== null) known.set(path, t);
+  } finally {
+    writing.delete(path);
+  }
+  if (app.openFiles.includes(path)) {
+    try {
+      editorBridge.setText(path, await ws.read(path));
+    } catch {
+      /* binary */
+    }
+  }
+  return true;
+}
+
 /**
- * Import Connectivity Kit `.hpprgm` files as workspace programs (`<name>.hpppl`). The name comes
- * from the file name (or the name stored in a named G1 file); an invalid one is asked for.
+ * Copy files into the workspace (the Files panel's Import button):
+ * - `.hpprgm` (experimental setting): the program inside → `<name>.hpppl`
+ * - `.hpppl`/`.ppl`/`.txt`: copied as programs
+ * - `.hpapp`/`.hpappprgm`/`.hpappnote` (a Connectivity Kit app folder's files): into `<name>.hpappdir/`
+ * - `.py`: into an app folder chosen in a dialog (Python runs inside an app), or a new Python app
+ * - `.hpexammode`: copied as an exam configuration (with the setting on)
  */
-export async function importHpprgm(files: File[]): Promise<void> {
+export async function importFiles(files: File[]): Promise<void> {
   let done = 0;
-  for (const f of files) {
-    let decoded;
+  const skipped: string[] = [];
+  // App parts first, so a .py in the same batch can go into an app imported with it.
+  const order = (f: File) => (APP_PART.test(f.name) ? 0 : /\.py$/i.test(f.name) ? 2 : 1);
+  for (const f of [...files].sort((a, b) => order(a) - order(b))) {
     try {
-      decoded = decodeHpprgm(new Uint8Array(await f.arrayBuffer()));
-    } catch (e) {
-      setStatus(`${f.name}: ${(e as Error).message}`, 'error');
-      continue;
-    }
-    let name = decoded.name ?? f.name.replace(/\.[^.]*$/, '');
-    if (!isValidName('program', name)) {
-      const typed = await askText(`"${name}" isn't a valid program name. Name for ${f.name}:`, name.replace(/[^A-Za-z0-9_]/g, '_').replace(/^(\d)/, '_$1'), {
-        title: 'Import program',
-        okLabel: 'Import',
-        validate: (v) => (isValidName('program', v) ? null : 'Letters, digits and _; must not start with a digit'),
-      });
-      if (!typed) continue;
-      name = typed;
-    }
-    try {
-      await importObject('program', name, decoded.source, f.name);
-      done++;
+      if (await importOne(f)) done++;
+      else skipped.push(f.name);
     } catch (e) {
       setStatus(`Couldn't import ${f.name}: ${(e as Error).message}`, 'error');
       return;
     }
   }
-  if (done) setStatus(`Imported ${done} of ${files.length} .hpprgm file(s)`, 'ok');
+  await refreshFiles();
+  const note = skipped.length ? ` (skipped ${skipped.join(', ')})` : '';
+  setStatus(`Imported ${done} of ${files.length} file(s)${note}`, done ? 'ok' : 'error');
+}
+
+async function importOne(f: File): Promise<boolean> {
+  const bytes = new Uint8Array(await f.arrayBuffer());
+  const lower = f.name.toLowerCase();
+  const progValid = (v: string) => isValidName('program', v);
+  const progHint = 'Letters, digits and _; must not start with a digit';
+
+  if (lower.endsWith('.hpprgm')) {
+    if (!ui.hpprgm) {
+      setStatus('Turn on Settings → Experimental → .hpprgm files to import .hpprgm programs', 'error');
+      return false;
+    }
+    const d = decodeHpprgm(bytes);
+    const name = await validNameFor(f.name, d.name ?? stem(f.name), 'program', progValid, progHint);
+    if (!name) return false;
+    await importText(fileFor('program', name), d.source, f.name);
+    return true;
+  }
+  if (/\.(hpppl|ppl|txt)$/.test(lower)) {
+    const ext = f.name.slice(stem(f.name).length);
+    const name = await validNameFor(f.name, stem(f.name), 'program', progValid, progHint);
+    if (!name) return false;
+    await importText(name + ext, decodeTextFile(bytes), f.name);
+    return true;
+  }
+  if (APP_PART.test(lower)) {
+    const name = await validNameFor(f.name, stem(f.name), 'app', isValidAppName, 'Not a valid app name');
+    if (!name) return false;
+    const path = `${appDirName(name)}/${name}${f.name.slice(stem(f.name).length)}`;
+    if (!(await importBytes(path, bytes, f.name))) return false;
+    await refreshFiles();
+    if (!lower.endsWith('.hpapp') && !app.files.includes(`${appDirName(name)}/${name}.hpapp`)) {
+      log('warn', `${appDirName(name)} has no ${name}.hpapp yet; import it too before sending the app`);
+    }
+    if (!/\.hpapp$/.test(lower)) openFile(path);
+    return true;
+  }
+  if (lower.endsWith('.py')) return importPython(f.name, bytes);
+  if (lower.endsWith('.hpexammode')) {
+    if (!ui.examMode) {
+      setStatus('Turn on Settings → Exam mode configurations to import exam configurations', 'error');
+      return false;
+    }
+    const name = await validNameFor(f.name, stem(f.name), 'exam configuration', isValidExamName, '1–31 characters, no / \\ : * ? " < > |');
+    if (!name) return false;
+    const file = examFileFor(name);
+    if (!(await importBytes(file, bytes, f.name))) return false;
+    examVersion.n++;
+    openFile(file);
+    return true;
+  }
+  setStatus(`${f.name}: this file type can't be imported`, 'error');
+  return false;
+}
+
+const NEW_PY_APP = '\u0000new';
+
+/** Put a .py into an app folder picked in a dialog, or into a new Python app. */
+async function importPython(fileName: string, bytes: Uint8Array): Promise<boolean> {
+  const apps = workspaceApps(app.files);
+  const choices = [
+    ...apps.map((a) => ({ value: a, label: appDisplayName(a) })),
+    { value: NEW_PY_APP, label: 'New Python app…' },
+  ];
+  const pick = await askChoice(`Python runs inside an app on the calculator. Which app should ${fileName} go into?`, choices, choices[0].value, {
+    title: `Import ${fileName}`,
+    okLabel: 'Import',
+  });
+  if (!pick) return false;
+  let appName = pick;
+  if (pick === NEW_PY_APP) {
+    const name = await askText('Name of the new Python app:', stem(fileName).replace(/[^A-Za-z0-9_ ]/g, ''), {
+      title: 'New Python app',
+      okLabel: 'Create',
+      validate: (v) => (isValidAppName(v) ? null : 'Not a valid app name'),
+    });
+    if (!name) return false;
+    if (!(await createApp(name, { label: 'None', bag: noneBag(), base: 'None' }, 'python'))) return false;
+    appName = name;
+  }
+  const path = `${appDirName(appName)}/${fileName}`;
+  if (!(await importBytes(path, bytes, fileName))) return false;
+  await refreshFiles();
+  openFile(path);
+  if (pick === NEW_PY_APP) {
+    setStatus(`Created Python app ${appName} with ${fileName}; edit its START() to import it`, 'ok');
+  }
+  return true;
 }
 
 /** Download a workspace program as a Connectivity Kit `.hpprgm` (current G2 format). */

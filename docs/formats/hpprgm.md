@@ -57,5 +57,7 @@ source text (UTF-16LE + NUL)
 
 ## In this project
 
-- **Import** (Files → Import .hpprgm) reads G2 or G1 files and saves each as `<name>.hpppl`. The name is the file's name, or the name inside a named G1 file. An invalid name is asked for. If the workspace already has a different version, a diff lets you choose which to keep.
+Behind **Settings → Experimental → .hpprgm files** (off by default).
+
+- **Import** (the Files panel's Import button) reads G2 or G1 files and saves each as `<name>.hpppl`. The name is the file's name, or the name inside a named G1 file. An invalid name is asked for. If the workspace already has a different version, a diff lets you choose which to keep.
 - **Export** (the export button on a program) writes the G2 format with one procedure entry per procedure the symbol scanner finds (`EXPORT` → 9). The CAS flag is always 0.

@@ -40,6 +40,11 @@
           hint: 'Keypad, Test keys and typing on the screen. On the G2, injected keys are often queued until a real key is pressed.',
         },
         {
+          flag: 'hpprgm',
+          label: '.hpprgm files',
+          hint: 'Import Connectivity Kit .hpprgm programs and export programs as .hpprgm. The format is from another project and not yet checked against real Connectivity Kit files.',
+        },
+        {
           flag: 'backupRestore',
           label: 'Backup and restore',
           hint: 'Download everything as a .zip, and send its programs and notes back. Not yet tested on hardware.',

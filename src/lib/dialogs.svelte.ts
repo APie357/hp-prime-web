@@ -21,7 +21,13 @@ export interface TextOptions extends DialogOptions {
 export type DialogRequest =
   | ({ kind: 'confirm'; message: string; resolve: (ok: boolean) => void } & DialogOptions)
   | ({ kind: 'alert'; message: string; resolve: () => void } & DialogOptions)
-  | ({ kind: 'prompt'; message: string; value: string; resolve: (value: string | null) => void } & TextOptions);
+  | ({ kind: 'prompt'; message: string; value: string; resolve: (value: string | null) => void } & TextOptions)
+  | ({ kind: 'choice'; message: string; choices: Choice[]; value: string; resolve: (value: string | null) => void } & DialogOptions);
+
+export interface Choice {
+  value: string;
+  label: string;
+}
 
 export const dialogs = $state({ current: null as DialogRequest | null });
 const queue: DialogRequest[] = [];
@@ -44,6 +50,11 @@ export function askConfirm(message: string, opts: DialogOptions = {}): Promise<b
 /** Ask for a line of text. Resolves the trimmed text, or null when canceled. */
 export function askText(message: string, value = '', opts: TextOptions = {}): Promise<string | null> {
   return new Promise((resolve) => open({ kind: 'prompt', message, value, resolve, ...opts }));
+}
+
+/** Pick one of several options. Resolves the chosen value, or null when canceled. */
+export function askChoice(message: string, choices: Choice[], value = choices[0]?.value ?? '', opts: DialogOptions = {}): Promise<string | null> {
+  return new Promise((resolve) => open({ kind: 'choice', message, choices, value, resolve, ...opts }));
 }
 
 /** Show a message with a single OK button. */

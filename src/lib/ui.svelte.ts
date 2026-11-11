@@ -61,6 +61,8 @@ export const ui = $state({
   examMode: load<boolean>('examMode', false),
   /** Advanced: fetch an object by name. */
   fetchByName: load<boolean>('fetchByName', false),
+  /** Experimental (layout from Xprime, untested with real files): .hpprgm import and export. */
+  hpprgm: load<boolean>('hpprgm', false),
   /** Experimental (untested on hardware): backup to .zip and restore. */
   backupRestore: load<boolean>('backupRestore', false),
   /** Settings dialog is open (not saved). */
@@ -82,7 +84,7 @@ export function setTheme(t: ThemePref): void {
 }
 
 /** On/off settings shown in the Settings dialog. */
-export type Flag = 'remoteKeys' | 'listOnConnect' | 'chat' | 'examMode' | 'fetchByName' | 'backupRestore';
+export type Flag = 'remoteKeys' | 'listOnConnect' | 'chat' | 'examMode' | 'fetchByName' | 'backupRestore' | 'hpprgm';
 
 export function setFlag(k: Flag, on: boolean): void {
   ui[k] = on;

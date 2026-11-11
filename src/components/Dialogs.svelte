@@ -5,9 +5,10 @@
 
   let dialog: HTMLDialogElement;
   let input = $state<HTMLInputElement>();
+  let select = $state<HTMLSelectElement>();
   let okButton = $state<HTMLButtonElement>();
   // svelte-ignore state_referenced_locally
-  let value = $state(req.kind === 'prompt' ? req.value : '');
+  let value = $state(req.kind === 'prompt' || req.kind === 'choice' ? req.value : '');
   const error = $derived(req.kind === 'prompt' && req.validate && value.trim() ? req.validate(value.trim()) : null);
   const canSubmit = $derived(req.kind !== 'prompt' || (!!value.trim() && !error));
 
@@ -16,13 +17,15 @@
     if (input) {
       input.focus();
       input.select();
-    } else okButton?.focus();
+    } else if (select) select.focus();
+    else okButton?.focus();
   });
 
   function finish(ok: boolean) {
     if (dialogs.current !== req) return;
     if (req.kind === 'confirm') req.resolve(ok);
     else if (req.kind === 'alert') req.resolve();
+    else if (req.kind === 'choice') req.resolve(ok ? value : null);
     else req.resolve(ok ? value.trim() : null);
     dialog.close();
     closeDialog();
@@ -50,6 +53,10 @@
     {#if req.kind === 'prompt'}
       <input bind:this={input} bind:value spellcheck="false" placeholder={req.placeholder} aria-invalid={!!error} />
       <p class="err" aria-live="polite">{error ?? ''}</p>
+    {:else if req.kind === 'choice'}
+      <select bind:this={select} bind:value aria-labelledby="dlg-msg">
+        {#each req.choices as c (c.value)}<option value={c.value}>{c.label}</option>{/each}
+      </select>
     {/if}
     <footer>
       {#if req.kind !== 'alert'}
@@ -94,6 +101,17 @@
     width: 100%;
     box-sizing: border-box;
     font-family: var(--mono);
+  }
+  select {
+    width: 100%;
+    margin-bottom: 12px;
+    font: inherit;
+    font-size: 13px;
+    color: var(--fg);
+    background: var(--input-bg);
+    border: 1px solid var(--input-border);
+    border-radius: 4px;
+    padding: 4px;
   }
   .err {
     color: var(--err);
