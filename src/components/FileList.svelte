@@ -113,7 +113,9 @@
           ><Icon name="database" size={16} /></button
         >
       {/if}
-      <button class="tool" title="New program, note or app" onclick={() => (app.newFileOpen = true)}><Icon name="add" size={15} />New</button>
+      <button class="only-icon" title="New program, note or app" aria-label="New" onclick={() => (app.newFileOpen = true)}
+        ><Icon name="add" size={16} /></button
+      >
       <button class="only-icon" title="Refresh" aria-label="Refresh" onclick={refreshFiles}><Icon name="refresh" size={16} /></button>
     </div>
   </header>
@@ -219,7 +221,6 @@
     flex: none;
   }
   /* Header buttons share one height so their edges line up. */
-  .tool,
   .only-icon {
     flex: none;
     box-sizing: border-box;
@@ -228,10 +229,6 @@
     align-items: center;
     justify-content: center;
     font-size: 12px;
-  }
-  .panel header .actions .tool {
-    gap: 4px;
-    padding: 0 8px 0 5px;
   }
   .panel header .actions .only-icon {
     width: 24px;
