@@ -7,6 +7,7 @@ import EditorWorker from 'monaco-editor/editor/editor.worker?worker';
 import { KEYWORDS } from './lang/lexer';
 import { COMMANDS } from './lang/catalog';
 import { registerPplProviders } from './lang/providers';
+import { registerPythonProviders } from './lang/pythonProviders';
 import { registerDiagnostics } from './lang/diagnostics';
 
 self.MonacoEnvironment = {
@@ -78,6 +79,7 @@ monaco.languages.setMonarchTokensProvider(PPL, {
 });
 
 registerPplProviders(monaco, PPL);
+registerPythonProviders(monaco);
 registerDiagnostics(monaco, PPL);
 
 monaco.editor.defineTheme('prime-dark', {

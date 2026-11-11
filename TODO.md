@@ -69,7 +69,8 @@ The user confirmed on 2026-11-09 that connect, send, receive, list, and fetch wo
 - [x] Formatter (`src/lib/lang/format.ts`; Shift+Alt+F or right-click → Format Document): re-indents by block, upper-cases keywords, trims trailing whitespace, collapses blank lines; leaves strings, comments, command case and `#cas…#end` alone. Unit-tested, not yet tried in a browser
 - [x] Highlight built-in commands (case-sensitive, so lower-case CAS calls and user variables aren't colored as commands); not yet tried in a browser
 - [x] `#PYTHON name()` … `#END` blocks: highlighted as Python (Monarch embedded language); one directive token for the lexer, so lint, outline and formatter skip them (formatter keeps them verbatim)
-  - [ ] Completion/hover inside Python blocks still offer PPL items
+- [x] Python completion, hover and signature help (`.py` files and `#PYTHON` blocks): HP Prime modules (hpprime, graphic, cas, arith, linalg, matplotl, math, urandom, …; names from the calculator's CMDS menu, fw 2.1.14730), imports and aliases, the file's own definitions, and the app's other `.py` modules
+  - [ ] Confirm the `hpprime`/`graphic` signatures on the G2 (HP doesn't document them; hovers say so), e.g. by running `help()`-style probes
 - [ ] Try all language features in a browser (completion, hover, signature help, outline, go-to-definition, folding, lint markers, formatter, highlighting) — deferred: no room for a headless Chromium on the dev machine
 
 ## 4. Workspace / UI

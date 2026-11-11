@@ -30,6 +30,7 @@ import {
 } from './files/app';
 import { BinaryFileError, fileType, languageFor } from './files/kinds';
 import { ICON_FILE, ICON_SIZE, makeAppIcon, pickImage, type IconResult } from './files/icon';
+import { setLocalModuleSource } from './lang/pythonProviders';
 import {
   fileFor,
   kindFromFile,
@@ -1116,6 +1117,26 @@ export async function createApp(
   setStatus(`Created ${what} ${name} based on ${base.base}. Send it to put it on the calculator (experimental)`, 'ok');
   return true;
 }
+
+/**
+ * Python modules importable from a file: the other `.py` files in the same app folder (open tabs
+ * use their unsaved text).
+ */
+setLocalModuleSource(async (path) => {
+  const appName = appOfPath(path);
+  const out = new Map<string, string>();
+  if (!appName || !workspace) return out;
+  for (const f of appFilesOf(appName)) {
+    if (f === path || fileType(f) !== 'python') continue;
+    const name = f.slice(f.lastIndexOf('/') + 1).replace(/\.py$/i, '');
+    try {
+      out.set(name, editorBridge.getText(f) ?? (await workspace.read(f)));
+    } catch {
+      /* unreadable */
+    }
+  }
+  return out;
+});
 
 // ------------------------------------------- objects sent by the calculator
 
