@@ -64,8 +64,8 @@
       title={screen.live ? 'Stop the live mirror' : 'Mirror the screen live (refresh continuously)'}
       onclick={() => setLive(!screen.live)}><Icon name="circle-fill" size={8} />Live</button
     >
-    <button class="icon" title="Take a screenshot" aria-label="Take a screenshot" disabled={!app.connected} onclick={() => captureScreen()}
-      ><Icon name="photo_camera" size={16} /></button
+    <button class="icon" title="Refresh the screen (one screenshot)" aria-label="Refresh the screen" disabled={!app.connected} onclick={() => captureScreen()}
+      ><Icon name="refresh" size={16} /></button
     >
     <button class="icon" title="Save the screenshot as PNG" aria-label="Save the screenshot as PNG" disabled={!screen.image} onclick={savePng}
       ><Icon name="download" size={16} /></button
