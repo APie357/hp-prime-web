@@ -85,6 +85,7 @@
       <Icon name="upload" size={16} /> Send {sendLabel} to calculator
     </button>
     <button
+      class="run"
       onclick={sendAndRun}
       disabled={!app.connected || !isProgram || !!app.busy}
       title="Send the program, then start it from the Home view using remote key presses and show the screen live (experimental; Ctrl+Shift+Enter)"
@@ -194,6 +195,10 @@
     display: inline-flex;
     align-items: center;
     gap: 5px;
+  }
+  /* The play triangle sits right of center in its box; pull it left so the padding looks even. */
+  .run :global(svg) {
+    margin-left: -5px;
   }
   .theme {
     width: 30px;
