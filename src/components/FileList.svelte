@@ -22,6 +22,7 @@
     workspaceApps,
   } from '../lib/state.svelte';
   import { ICON_FILE } from '../lib/files/icon';
+  import PythonLogo from './PythonLogo.svelte';
 
   /** Object URLs for app icons shown in the list, by app name. */
   let iconUrls = $state<Record<string, string>>({});
@@ -54,7 +55,7 @@
     note: '✎',
     'app-program': '▸',
     'app-note': '✎',
-    python: '🐍',
+    python: '',
     text: '≡',
     binary: '◆',
   };
@@ -177,7 +178,9 @@
               onkeydown={(e) => onKey(e, f)}
               title={editable ? `${f} (F2 to rename)` : `${f} (binary; sent as-is)`}
             >
-              <span class="icon">{ICONS[fileType(f)]}</span>{label(f, name)}{#if app.dirty.includes(f)}<span class="dot">●</span>{/if}
+              <span class="icon"
+                >{#if fileType(f) === 'python'}<PythonLogo size={12} />{:else}{ICONS[fileType(f)]}{/if}</span
+              >{label(f, name)}{#if app.dirty.includes(f)}<span class="dot">●</span>{/if}
             </button>
             {#if label(f, name) === f.slice(appDirName(name).length + 1)}
               <button class="act" title="Rename (F2)" aria-label="Rename {f}" onclick={() => renameFile(f)}>✏</button>

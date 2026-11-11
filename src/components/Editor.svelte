@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { monaco, monacoTheme, PPL } from '../lib/monaco';
   import { resolvedTheme } from '../lib/ui.svelte';
+  import PythonLogo from './PythonLogo.svelte';
   import { fileType, isProse, languageFor } from '../lib/files/kinds';
   import {
     app,
@@ -87,7 +88,7 @@
     note: '✎',
     'app-program': '▣',
     'app-note': '✎',
-    python: '🐍',
+    python: '',
     text: '≡',
     binary: '◆',
   };
@@ -196,7 +197,7 @@
         }}
         ondragend={() => (dragged = null)}
       >
-        <span class="icon">{ICONS[fileType(f)]}</span>
+        <span class="icon">{#if fileType(f) === 'python'}<PythonLogo size={13} />{:else}{ICONS[fileType(f)]}{/if}</span>
         <span class="name">{f.replace(/^.*\//, '')}</span>
         <button
           class="close"

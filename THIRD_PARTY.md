@@ -19,3 +19,6 @@ tables come from the following projects:
 | svelte | MIT |
 | fflate | MIT |
 | idb-keyval | Apache-2.0 |
+
+## Trademarks
+- The Python logo mark in `src/components/PythonLogo.svelte` is taken unaltered (paths and colors, without the wordmark) from python.org's `python-logo-generic.svg`. "Python" and the Python logos are trademarks of the Python Software Foundation, used here only to label Python files, per the [PSF Trademark Usage Policy](https://www.python.org/psf/trademarks/).
