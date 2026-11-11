@@ -155,7 +155,7 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 6px 12px;
+    padding: 6px 8px; /* same side padding as the panel headers, so right-hand buttons line up */
     background: var(--panel);
     border-bottom: 1px solid var(--border);
   }
