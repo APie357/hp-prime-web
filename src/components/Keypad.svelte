@@ -1,6 +1,16 @@
 <script lang="ts">
   import { KEYS, type PrimeKey } from '../lib/hid/keys';
   import { pressKeys } from '../lib/state.svelte';
+  import Icon from './Icon.svelte';
+  import type { IconName } from '../lib/icons';
+
+  /** Cursor keys get Material arrows instead of their text labels. */
+  const ARROWS: Record<number, IconName> = {
+    2: 'keyboard_arrow_up',
+    7: 'keyboard_arrow_left',
+    8: 'keyboard_arrow_right',
+    12: 'keyboard_arrow_down',
+  };
 
   const key = (code: number): PrimeKey => KEYS[code];
   // Layout of the physical keyboard, top to bottom. 0 is a gap.
@@ -25,7 +35,7 @@
 
 {#snippet btn(k: PrimeKey)}
   <button class="key {cls(k)}" onclick={() => pressKeys([k.code])} title="Key {k.code}{k.alpha ? ` · Alpha: ${k.alpha}` : ''}">
-    <span class="lbl">{k.label}</span>
+    <span class="lbl">{#if ARROWS[k.code]}<Icon name={ARROWS[k.code]} size={18} label={k.label} />{:else}{k.label}{/if}</span>
     {#if k.alpha}<span class="alpha-lbl">{k.alpha}</span>{/if}
   </button>
 {/snippet}

@@ -3,6 +3,8 @@
   import { monaco, monacoTheme, PPL } from '../lib/monaco';
   import { resolvedTheme } from '../lib/ui.svelte';
   import PythonLogo from './PythonLogo.svelte';
+  import Icon from './Icon.svelte';
+  import { fileIcon } from '../lib/icons';
   import { fileType, isProse, languageFor } from '../lib/files/kinds';
   import {
     app,
@@ -82,16 +84,6 @@
   $effect(() => {
     monaco.editor.setTheme(monacoTheme(resolvedTheme()));
   });
-
-  const ICONS: Record<string, string> = {
-    program: '▸',
-    note: '✎',
-    'app-program': '▣',
-    'app-note': '✎',
-    python: '',
-    text: '≡',
-    binary: '◆',
-  };
 
   // Tab drag-and-drop reordering.
   let dragged: string | null = null;
@@ -197,7 +189,7 @@
         }}
         ondragend={() => (dragged = null)}
       >
-        <span class="icon">{#if fileType(f) === 'python'}<PythonLogo size={13} />{:else}{ICONS[fileType(f)]}{/if}</span>
+        <span class="icon">{#if fileType(f) === 'python'}<PythonLogo size={13} />{:else}<Icon name={fileIcon(fileType(f))} size={15} />{/if}</span>
         <span class="name">{f.replace(/^.*\//, '')}</span>
         <button
           class="close"
@@ -208,7 +200,7 @@
             e.stopPropagation();
             closeFile(f);
           }}
-        ><span class="x">✕</span><span class="d">●</span></button>
+        ><span class="x"><Icon name="close" size={14} /></span><span class="d"><Icon name="circle-fill" size={8} /></span></button>
       </div>
     {/each}
   </div>
@@ -272,6 +264,7 @@
     outline-offset: -1px;
   }
   .tab .icon {
+    display: inline-flex;
     color: var(--muted);
   }
   .close {
@@ -289,6 +282,10 @@
     background: var(--hover);
     color: var(--fg);
   }
+  .close .x,
+  .close .d {
+    display: inline-flex;
+  }
   .close .d {
     display: none;
     color: var(--accent);
@@ -297,7 +294,7 @@
     display: none;
   }
   .close.dirty:not(:hover) .d {
-    display: inline;
+    display: inline-flex;
   }
   .tab:not(.active):not(:hover) .close:not(.dirty) .x {
     visibility: hidden;

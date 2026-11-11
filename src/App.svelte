@@ -8,6 +8,7 @@
   import Splitter from './components/Splitter.svelte';
   import DiffView from './components/DiffView.svelte';
   import NewAppDialog from './components/NewAppDialog.svelte';
+  import Icon from './components/Icon.svelte';
   import { appDisplayName, appOfPath } from './lib/files/app';
   import { fileType } from './lib/files/kinds';
   import { cycleTheme, resetSize, resolvedTheme, saveLayout, setSize, ui, type Layout } from './lib/ui.svelte';
@@ -26,7 +27,7 @@
     else document.documentElement.dataset.theme = ui.theme;
   });
 
-  const themeIcon = $derived(ui.theme === 'auto' ? '◐' : ui.theme === 'light' ? '☀' : '☾');
+  const themeIcon = $derived(ui.theme === 'auto' ? 'brightness_auto' : ui.theme === 'light' ? 'light_mode' : 'dark_mode');
 
   // Panel resizing: remember the size when a drag starts and apply the pointer delta.
   let startSize = 0;
@@ -62,17 +63,18 @@
     <h1>HP Prime Web IDE</h1>
     {#if app.connected}
       <button onclick={disconnect}>Disconnect</button>
-      <span class="dev ok">● {app.deviceLabel}</span>
+      <span class="dev ok"><Icon name="usb" size={16} /> {app.deviceLabel}</span>
     {:else}
-      <button class="primary" onclick={connect} disabled={!app.hidSupported || !!app.busy}>Connect calculator</button>
-      <span class="dev">○ not connected</span>
+      <button class="primary" onclick={connect} disabled={!app.hidSupported || !!app.busy}><Icon name="usb" size={16} /> Connect calculator</button
+      >
+      <span class="dev"><Icon name="usb_off" size={16} /> not connected</span>
     {/if}
     <span class="spacer"></span>
     <button
       class="theme"
       onclick={cycleTheme}
       title="Theme: {ui.theme === 'auto' ? `Auto (${resolvedTheme()})` : ui.theme} — click to change"
-      aria-label="Theme: {ui.theme}">{themeIcon}</button
+      aria-label="Theme: {ui.theme}"><Icon name={themeIcon} size={18} /></button
     >
     <button
       class="primary"
@@ -80,14 +82,14 @@
       disabled={!app.connected || !app.current || !!app.busy}
       title="Send the open program to the calculator (Ctrl+Enter)"
     >
-      Send {sendLabel} to calculator
+      <Icon name="upload" size={16} /> Send {sendLabel} to calculator
     </button>
     <button
       onclick={sendAndRun}
       disabled={!app.connected || !isProgram || !!app.busy}
       title="Send the program, then start it from the Home view using remote key presses and show the screen live (experimental; Ctrl+Shift+Enter)"
     >
-      ▶ Send &amp; Run
+      <Icon name="play_arrow" size={18} /> Send &amp; Run
     </button>
   </header>
 
@@ -130,7 +132,7 @@
       title="Toggle console (Ctrl+`)"
       aria-pressed={app.showConsole}
     >
-      {app.showConsole ? '▾' : '▴'} Console
+      <Icon name={app.showConsole ? 'keyboard_arrow_down' : 'keyboard_arrow_up'} size={16} /> Console
     </button>
   </footer>
 </div>
@@ -160,6 +162,9 @@
     font-weight: 600;
   }
   .dev {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
     font-size: 13px;
     color: var(--muted);
   }
@@ -179,8 +184,14 @@
     display: grid;
     min-height: 0;
   }
+  .toolbar button {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
   .theme {
     width: 30px;
+    justify-content: center;
     padding: 3px 0;
   }
   .left,
@@ -225,6 +236,9 @@
   }
   .console-toggle {
     flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
     font-size: 12px;
     color: #fff;
     background: transparent;

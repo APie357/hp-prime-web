@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from './Icon.svelte';
   import { onMount } from 'svelte';
   import { isValidAppName, pythonModuleName, type AppLanguage } from '../lib/files/app';
   import { app, appBases, createApp, iconFitNote, refreshCalcContents, type AppBase } from '../lib/state.svelte';
@@ -132,7 +133,7 @@
       {#if iconUrl}
         <img src={iconUrl} alt="App icon preview" width="38" height="38" />
       {:else}
-        <span class="icon-empty" aria-hidden="true">▣</span>
+        <span class="icon-empty" aria-hidden="true"><Icon name="widgets" size={26} /></span>
       {/if}
       <button type="button" onclick={chooseIcon}>{icon ? 'Change…' : 'Choose image…'}</button>
       {#if icon}<button type="button" onclick={clearIcon}>Remove</button>{/if}
