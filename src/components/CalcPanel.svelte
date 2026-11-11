@@ -288,13 +288,16 @@
     overflow: auto;
     min-height: 0;
   }
-  h3 {
-    font-size: 12px;
+  /* Section headings use the panel title's type (app.css h2) and spacing, so they read as one set. */
+  h3.pad {
+    font-size: 11px;
+    font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.06em;
+    line-height: 24px;
     color: var(--muted);
     border-top: 1px solid var(--border);
-    padding-top: 10px;
+    padding: 8px 8px 4px 16px;
   }
   /* Right under the header (info and the optional rows hidden), the header's own border is enough. */
   header + .chat > h3:first-child,
