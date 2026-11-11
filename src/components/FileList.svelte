@@ -210,8 +210,9 @@
     justify-content: center;
     font-size: 12px;
   }
-  .panel header .actions .tool {
-    gap: 3px;
+  .panel header .actions .tool,
+  .ws .tool {
+    gap: 4px;
     padding: 0 8px 0 5px;
   }
   .panel header .actions .only-icon,
