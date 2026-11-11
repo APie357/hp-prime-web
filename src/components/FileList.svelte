@@ -15,9 +15,39 @@
     openFolder,
     refreshFiles,
     reopenFolder,
+    iconVersion,
+    readAppIcon,
     sendAppFolder,
+    setAppIcon,
     workspaceApps,
   } from '../lib/state.svelte';
+  import { ICON_FILE } from '../lib/files/icon';
+
+  /** Object URLs for app icons shown in the list, by app name. */
+  let iconUrls = $state<Record<string, string>>({});
+  $effect(() => {
+    void iconVersion.n;
+    const withIcon = apps.filter((a) => app.files.includes(`${appDirName(a)}/${ICON_FILE}`));
+    let cancelled = false;
+    const made: string[] = [];
+    void Promise.all(
+      withIcon.map(async (a) => {
+        const png = await readAppIcon(a);
+        if (!png) return null;
+        const url = URL.createObjectURL(new Blob([png as Uint8Array<ArrayBuffer>], { type: 'image/png' }));
+        made.push(url);
+        return [a, url] as const;
+      }),
+    ).then((pairs) => {
+      if (cancelled) return;
+      iconUrls = Object.fromEntries(pairs.filter((p) => p !== null));
+    });
+    return () => {
+      cancelled = true;
+      // Revoke on the next refresh (the old images stay visible until the new ones load).
+      setTimeout(() => made.forEach((u) => URL.revokeObjectURL(u)), 5000);
+    };
+  });
 
   const ICONS: Record<string, string> = {
     program: '▸',
@@ -103,7 +133,13 @@
     {#each apps as name (name)}
       <li class="app-row" class:open={isOpen(name)}>
         <button class="file" onclick={() => toggle(name)} aria-expanded={isOpen(name)} title={appDirName(name)}>
-          <span class="icon chev">{isOpen(name) ? '▾' : '▸'}</span><span class="app-icon">▣</span>{appDisplayName(name)}
+          <span class="icon chev">{isOpen(name) ? '▾' : '▸'}</span>{#if iconUrls[name]}<img
+              class="app-img"
+              src={iconUrls[name]}
+              alt=""
+              width="16"
+              height="16"
+            />{:else}<span class="app-icon">▣</span>{/if}{appDisplayName(name)}
           {#if isSystemApp(name)}<span class="tag">built-in</span>{/if}
         </button>
         <button
@@ -112,6 +148,12 @@
           aria-label="Send app {appDisplayName(name)}"
           disabled={!app.connected || !!app.busy}
           onclick={() => sendAppFolder(name)}>⇪</button
+        >
+        <button
+          class="act"
+          title="Set icon (any image; cropped to a square and scaled to 38×38)"
+          aria-label="Set icon of {appDisplayName(name)}"
+          onclick={() => setAppIcon(name)}>🖼</button
         >
         <button class="act" title="Add a file (e.g. a Python module)" aria-label="Add a file to {appDisplayName(name)}" onclick={() => addAppFile(name)}>＋</button>
         {#if !isSystemApp(name)}
@@ -231,6 +273,14 @@
   }
   .child .file {
     padding-left: 30px;
+  }
+  .app-img {
+    width: 16px;
+    height: 16px;
+    margin-right: 5px;
+    vertical-align: -3px;
+    image-rendering: pixelated;
+    border-radius: 2px;
   }
   .app-icon {
     margin-right: 5px;

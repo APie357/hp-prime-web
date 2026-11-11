@@ -27,6 +27,7 @@ import {
   parseAppPayload,
 } from './files/app';
 import { BinaryFileError, fileType, languageFor } from './files/kinds';
+import { ICON_FILE, ICON_SIZE, makeAppIcon, pickImage, type IconResult } from './files/icon';
 import {
   fileFor,
   kindFromFile,
@@ -1028,7 +1029,54 @@ export async function appBases(): Promise<AppBase[]> {
 }
 
 /** Create a new app folder from a base app's data, with a starter program. */
-export async function createApp(name: string, base: AppBase, lang: AppLanguage = 'ppl'): Promise<boolean> {
+/** Describe how a picked image was fitted, e.g. "cropped and scaled from 120×80". */
+export function iconFitNote(r: IconResult): string {
+  if (!r.cropped && !r.scaled) return '';
+  const how = r.cropped && r.scaled ? 'cropped and scaled' : r.cropped ? 'cropped' : 'scaled';
+  return `${how} from ${r.width}×${r.height} to ${ICON_SIZE}×${ICON_SIZE}`;
+}
+
+/** Choose an image and make it the app's icon (centre-cropped to a square, scaled to 38×38). */
+export async function setAppIcon(name: string, file?: File | null): Promise<void> {
+  file ??= await pickImage();
+  if (!file) return;
+  let r: IconResult;
+  try {
+    r = await makeAppIcon(file);
+  } catch (e) {
+    return setStatus(`Icon: ${(e as Error).message}`, 'error');
+  }
+  const ws = await ensureWorkspace();
+  const path = `${appDirName(name)}/${ICON_FILE}`;
+  await ws.writeBytes(path, r.png);
+  const t = await ws.stat(path);
+  if (t !== null) known.set(path, t);
+  await refreshFiles();
+  iconVersion.n++;
+  const note = iconFitNote(r);
+  setStatus(`Set the icon of ${appDisplayName(name)}${note ? ` (${note})` : ''}. Send the app to update it on the calculator`, 'ok');
+}
+
+/** Bumped when an icon changes, so thumbnails reload. */
+export const iconVersion = $state({ n: 0 });
+
+/** The app's icon.png bytes from the workspace, or null. */
+export async function readAppIcon(name: string): Promise<Uint8Array | null> {
+  const path = `${appDirName(name)}/${ICON_FILE}`;
+  if (!app.files.includes(path) || !workspace) return null;
+  try {
+    return await workspace.readBytes(path);
+  } catch {
+    return null;
+  }
+}
+
+export async function createApp(
+  name: string,
+  base: AppBase,
+  lang: AppLanguage = 'ppl',
+  icon?: Uint8Array,
+): Promise<boolean> {
   if (!isValidAppName(name)) {
     setStatus(`"${name}" is not a valid app name`, 'error');
     return false;
@@ -1039,7 +1087,8 @@ export async function createApp(name: string, base: AppBase, lang: AppLanguage =
     return false;
   }
   const starter = newAppStarter(name, base.base, lang);
-  const parts = { bag: base.bag, note: encodeAppText(''), program: encodeAppText(starter.program), files: starter.files };
+  const files = icon ? [...starter.files, { name: ICON_FILE, data: icon }] : starter.files;
+  const parts = { bag: base.bag, note: encodeAppText(''), program: encodeAppText(starter.program), files };
   for (const e of appToFolder(name, parts)) {
     await ws.writeBytes(e.path, e.data);
     const t = await ws.stat(e.path);

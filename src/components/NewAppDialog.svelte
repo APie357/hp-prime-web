@@ -1,7 +1,34 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { isValidAppName, pythonModuleName, type AppLanguage } from '../lib/files/app';
-  import { app, appBases, createApp, refreshCalcContents, type AppBase } from '../lib/state.svelte';
+  import { app, appBases, createApp, iconFitNote, refreshCalcContents, type AppBase } from '../lib/state.svelte';
+  import { makeAppIcon, pickImage, type IconResult } from '../lib/files/icon';
+  import { onDestroy } from 'svelte';
+
+  let icon = $state<IconResult | null>(null);
+  let iconUrl = $state('');
+  let iconError = $state('');
+
+  async function chooseIcon() {
+    const f = await pickImage();
+    if (!f) return;
+    try {
+      icon = await makeAppIcon(f);
+      iconError = '';
+      if (iconUrl) URL.revokeObjectURL(iconUrl);
+      iconUrl = URL.createObjectURL(new Blob([icon.png as Uint8Array<ArrayBuffer>], { type: 'image/png' }));
+    } catch (e) {
+      iconError = (e as Error).message;
+    }
+  }
+
+  function clearIcon() {
+    icon = null;
+    if (iconUrl) URL.revokeObjectURL(iconUrl);
+    iconUrl = '';
+  }
+
+  onDestroy(() => iconUrl && URL.revokeObjectURL(iconUrl));
 
   let dialog: HTMLDialogElement;
   let name = $state('');
@@ -25,7 +52,7 @@
   async function submit(e: Event) {
     e.preventDefault();
     if (!bases?.length || !valid) return;
-    if (await createApp(name.trim(), bases[chosen], lang)) close();
+    if (await createApp(name.trim(), bases[chosen], lang, icon?.png)) close();
   }
 
   async function list() {
@@ -100,6 +127,18 @@
         </span>
       </label>
     </fieldset>
+    <div class="icon-row">
+      <span class="lbl">Icon</span>
+      {#if iconUrl}
+        <img src={iconUrl} alt="App icon preview" width="38" height="38" />
+      {:else}
+        <span class="icon-empty" aria-hidden="true">▣</span>
+      {/if}
+      <button type="button" onclick={chooseIcon}>{icon ? 'Change…' : 'Choose image…'}</button>
+      {#if icon}<button type="button" onclick={clearIcon}>Remove</button>{/if}
+    </div>
+    {#if icon && iconFitNote(icon)}<p class="muted small">Image {iconFitNote(icon)}.</p>{/if}
+    {#if iconError}<p class="err">{iconError}</p>{/if}
     <footer>
       <button type="button" onclick={close}>Cancel</button>
       <button class="primary" type="submit" disabled={!valid || !bases?.length}>Create</button>
@@ -165,6 +204,33 @@
   }
   code {
     font-size: 12px;
+  }
+  .icon-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-size: 13px;
+  }
+  .icon-row .lbl {
+    width: 34px;
+  }
+  .icon-row img,
+  .icon-empty {
+    width: 38px;
+    height: 38px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    image-rendering: pixelated;
+  }
+  .icon-empty {
+    display: grid;
+    place-items: center;
+    color: var(--muted);
+  }
+  .small {
+    font-size: 12px;
+    margin-top: -4px;
   }
   .hint {
     font-size: 12px;

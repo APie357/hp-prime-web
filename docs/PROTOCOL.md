@@ -225,6 +225,7 @@ The body is a series of sections, each `u32 big-endian length | bytes`:
 - **Names:** built-in apps are named with a leading `&` (`&Function`, `&Statistics 1Var`). Custom apps have plain names (`Dynatris`).
 - **Base app (bag byte 20)**, per prime_connection_kit: 0 Function, 1 Solve, 2 Statistics 1Var, 3 Statistics 2Var, 4 Inference, 5 Parametric, 6 Polar, 7 Sequence, 8 Finance, 9 Linear Solver, 10 Triangle Solver, 14 Data Streamer, 15 Geometry, 16 Spreadsheet, 17 Advanced Graphing, 18 Graph 3D, 19 Explorer, 20 None, 21 Python. Matches all 18 built-ins on the G2.
 - **Python apps:** the app program holds `#PYTHON name()` … `#END` blocks (e.g. `START()`, `RESET()`). Modules travel as extra files in plain text. A compressed-looking `.bin` file inside Dynatris is that app's own format: its `.py` decompresses it. It isn't something the calculator does.
+- **Icon:** an extra file named `icon.png`. Dynatris's is a 38×38, 4-bit palette PNG. Whether other sizes or PNG kinds work is untested.
 - **No separate `07`/`08` objects** appeared in a G2 backup: the note and program travel inside the type-02 body. (hplp marks `07`/`08` as tentative; pck sends them separately.)
 - **New apps:** since the bag has no name, a new app is a base app's bag sent under a new name with its own program. **Unverified:** whether the calculator accepts an app created this way.
 - **Fetching one app** with `F8` type `02` is untested. Listing works through the backup (§7).

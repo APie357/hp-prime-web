@@ -88,3 +88,12 @@ describe('app payload', () => {
     expect(() => parseAppPayload(Uint8Array.of(0, 0, 0, 9, 1))).toThrow(/past the end/);
   });
 });
+
+describe('app icon fitting', () => {
+  it('takes the centre square of the picked image', async () => {
+    const { centreSquare } = await import('../src/lib/files/icon');
+    expect(centreSquare(38, 38)).toEqual([0, 0, 38]);
+    expect(centreSquare(120, 80)).toEqual([20, 0, 80]);
+    expect(centreSquare(50, 101)).toEqual([0, 25, 50]);
+  });
+});

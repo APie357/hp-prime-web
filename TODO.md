@@ -53,6 +53,8 @@ The user confirmed on 2026-11-09 that connect, send, receive, list, and fetch wo
   - [x] Apps as `<Name>.hpappdir/` folders: program, Info note, extra files (Python modules) editable; app data and binary files sent as-is
   - [x] List apps (Calculator panel), fetch by name, open into the workspace, delete custom apps (EB type 02)
   - [x] Send an app (overwrite check, read-back verify); ＋ App creates one from a base app's data
+  - [x] App icon (`icon.png`, 38×38 like Dynatris's): 🖼 on the app row or in New app; any image is centre-cropped and scaled
+  - [ ] On the G2: does an RGBA PNG icon show in the Apps screen? (Dynatris's is a 4-bit palette PNG; convert if needed)
   - [ ] On the G2: does sending an app work? Does a new app (copied bag, new name) appear in the Apps screen? Does F8 fetch one app?
   - [ ] ▶ Run an app (deferred): e.g. send a helper program that calls `STARTAPP("Name")`, then start it like Send & Run
 
