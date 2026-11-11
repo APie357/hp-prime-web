@@ -25,6 +25,8 @@ export class MockPrime implements ReportPort {
   objects = new Map<string, Uint8Array>();
   sentKeys: number[][] = [];
   clockSets: number[][] = [];
+  deleted: string[] = [];
+  chats: string[] = [];
   refuseWrites = false;
 
   constructor(readonly reportSize = 1024) {
@@ -80,6 +82,16 @@ export class MockPrime implements ReportPort {
         }
         return this.reply(Uint8Array.of(0xf9, 0x01, 0, 0, 0, 0));
       }
+      case C.CMD.DELETE: {
+        const f = parseNamed(msg);
+        this.deleted.push(`${f.type}:${f.name}`);
+        if (this.refuseWrites) return this.reply(Uint8Array.of(0xf9, 0x01, 0, 0, 0, 0));
+        this.objects.delete(`${f.type}:${f.name}`);
+        return; // silent (real reply unknown)
+      }
+      case C.CMD.CHAT:
+        this.chats.push(fromUtf16le(msg.subarray(6)));
+        return;
       case C.CMD.SET_TIME:
         this.clockSets.push(Array.from(msg.subarray(6)));
         return; // silent
@@ -88,4 +100,9 @@ export class MockPrime implements ReportPort {
         return;
     }
   }
+}
+
+/** Type and name of an F7/F8/EB named-object message. */
+function parseNamed(msg: Uint8Array): { type: number; name: string } {
+  return { type: msg[6], name: fromUtf16le(msg.subarray(10, 10 + msg[7])) };
 }

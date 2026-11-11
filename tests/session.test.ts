@@ -86,4 +86,25 @@ describe('PrimeSession', () => {
     await s.sendKeys([5, 30]);
     expect(calc.sentKeys).toEqual([[5, 30]]);
   });
+  it('deletes an object and confirms it is gone', async () => {
+    const { s, calc } = session();
+    calc.setProgram('OLD', 'EXPORT OLD()\nBEGIN\nEND;');
+    expect(await s.deleteObject(6, 'OLD')).toEqual({ refused: false, gone: true });
+    expect(calc.deleted).toEqual(['6:OLD']);
+    expect(calc.program('OLD')).toBeUndefined();
+  });
+
+  it('reports a refused delete', async () => {
+    const { s, calc } = session();
+    calc.setProgram('KEEP', 'x');
+    calc.refuseWrites = true;
+    expect(await s.deleteObject(6, 'KEEP')).toEqual({ refused: true, gone: false });
+    expect(calc.program('KEEP')).toBe('x');
+  });
+
+  it('sends a chat message as UTF-16LE', async () => {
+    const { s, calc } = session();
+    await s.sendChat('hi ▶ π');
+    expect(calc.chats).toEqual(['hi ▶ π']);
+  });
 });

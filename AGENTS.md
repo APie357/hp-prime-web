@@ -12,7 +12,8 @@ The goal is a browser IDE for writing HP Prime PPL ("HP Basic") programs and sen
 - **Notes + clock sync (2026-11-09):** notes are `.note` files (plain text) and send, fetch and list like programs, using type `0x05`. **Sync clock** sends E7 followed by a ready check. Both confirmed on the G2.
 - **UI:** the console is hidden by default and toggled from the status bar or with Ctrl+` (remembered in localStorage).
 - **Screen + run (2026-11-10):** `ScreenPanel.svelte` shows screenshots (single, live mirror, save PNG) with a pixel-format picker. **The screen displays correctly on the G2 with the default RGB555.** Key injection only queues keys on the G2 (see Remote run); a key-mode picker next to Test keys selects the encoding. `Keypad.svelte` is a remote keypad, and typing on the focused screen also sends keys (`keysForKeyboardEvent`). The key table and the text→keys mapping are in `src/lib/hid/keys.ts`: upper case is Alpha+key, lower case is Alpha+Shift+key (a guess), and `_` can't be typed. `PrimeSession.pressKeys` sends **one `EC` message per key** with an 80 ms gap. PrimeDev only defines the codes (`HpKey.cs`; `SENDKEY = 0xEC`); no reference builds the message, so the layout is unconfirmed. **Test keys** (`probeKeys`) runs the probe and remembers the result. **▶ Send & Run** sends, then types Home, Esc, the name (`runTarget`: the exported procedure named like the file, else the first exported one; numeric args go inside `( )`), Enter, and turns on the live screen. It warns when the screen didn't change.
-- **Next:** hardware checks (TODO §1, plus screen colors and `EC` on the G2) → `.hpprgm` import/export → language-feature browser check.
+- **More calculator features (2026-11-10, untested on hardware):** **Delete** (✕ per object in the Calculator panel) sends `EB`, treats an F9 reply as a refusal, and confirms with an F8 probe. **Backup to .zip** (`src/lib/files/backup.ts`) stores every F9 object raw plus readable programs/notes and a `manifest.json`. **Restore…** sends only the programs and notes from such a zip through `sendText` (with read-back). A **chat** box sends `F2`. The app **auto-reconnects** to a granted calculator on load and on the HID `connect` event.
+- **Next:** hardware checks (delete, backup/restore, chat, auto-reconnect) (TODO §1, plus screen colors and `EC` on the G2) → `.hpprgm` import/export → language-feature browser check.
 
 ## Conventions
 - Repo: https://github.com/APie357/hp-prime-web (public). Every push to `main` runs `.github/workflows/pages.yml` (test → build → deploy) to https://apie357.github.io/hp-prime-web/. Vite's `base` is `/hp-prime-web/` in production builds.
@@ -59,6 +60,7 @@ src/
     log.ts         Svelte store of hex-dumped IN/OUT packets for the console
   lib/screen.ts      screenshot decode (Prime 16-bit PNG or browser) + pixel diff for the probe
   lib/files/
+    backup.ts      full-backup .zip (manifest + raw objects + readable programs/notes) build/read
     hpprgm.ts      decode (plain + 7C618AB2 container) / encode plain .hpprgm; UTF-16 helpers
     workspace.ts   FS Access dir handle (persisted in IndexedDB, re-permission on load) + IndexedDB fallback
   lib/lang/

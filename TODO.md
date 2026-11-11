@@ -26,15 +26,21 @@ The user confirmed on 2026-11-09 that connect, send, receive, list, and fetch wo
   - [x] On the G2: `EC 01 00 00 00 01 code` reaches the calculator but is only *queued*: the key appears when a physical key is pressed (and the battery icon then disappears)
   - [ ] Try the key modes (all in one message / press + release / then ready check) and record which one, if any, makes keys take effect immediately; then V2 framing as a last resort
   - [ ] On the G2: is lower case Alpha → Shift → key? Is there a key sequence for `_`?
-- [ ] Delete a program on the calculator (`EB`), with confirmation and verification afterwards
+- [x] Delete a program or note on the calculator (`EB`): ✕ in the calculator list, confirmation, then an F8 probe checks it's gone
+  - [ ] On the G2: does EB delete, and what (if anything) does it reply? Record in AGENTS.md
 - [x] Notes (type `0x05`): list, fetch, edit, send (plain text; rich formatting is replaced on upload)
 - [x] Verify notes on the G2: plain-text upload shows correctly in the Notes app, and the formatting warning appears for rich notes
 - [ ] Optional: preserve rich formatting when the plain text hasn't changed
 - [x] Set the calculator clock (`E7`) — **Sync clock** button
 - [x] Verify clock sync on the G2 (correct date and time, timezone)
-- [ ] Chat send/receive (`F2`)
-- [ ] Full backup to a `.zip`
-- [ ] Auto-reconnect to an already-granted calculator on page load
+- [x] Chat send (`F2`, experimental message box in the Calculator panel)
+  - [ ] On the G2: does anything appear? Can the calculator send chat back?
+- [x] Full backup to a `.zip` (`src/lib/files/backup.ts`: `manifest.json`, `raw/<type>/<name>.bin` for every object, readable `programs/` and `notes/`)
+- [x] Restore programs and notes from a backup `.zip` (through the verified send path; other object types are skipped)
+  - [ ] On the G2: back up, restore, and compare
+  - [ ] Restoring apps/variables/settings from `raw/` (needs hardware testing; risky)
+- [x] Auto-reconnect to an already-granted calculator on page load and when it's plugged back in
+  - [ ] Check in Chrome on hardware
 - [ ] V2 negotiated transport (`FF EC …`), only if legacy framing misbehaves on some firmware
 
 ## 3. Editor / language support (paused — resume later)

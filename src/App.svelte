@@ -5,13 +5,14 @@
   import CalcPanel from './components/CalcPanel.svelte';
   import ScreenPanel from './components/ScreenPanel.svelte';
   import Console from './components/Console.svelte';
-  import { app, connect, disconnect, initWorkspace, sendAndRun, sendCurrent, toggleConsole } from './lib/state.svelte';
+  import { app, autoConnect, connect, disconnect, initWorkspace, sendAndRun, sendCurrent, toggleConsole } from './lib/state.svelte';
   import { kindFromFile, programNameFromFile } from './lib/files/workspace';
 
   const isProgram = $derived(!!app.current && kindFromFile(app.current) === 'program');
 
   onMount(() => {
     initWorkspace();
+    void autoConnect();
   });
 
   function onKey(e: KeyboardEvent) {

@@ -69,6 +69,13 @@ export function isValidName(kind: TextKind, name: string): boolean {
 export type KeyMode = 'single' | 'batch' | 'release' | 'ready';
 export const KEY_MODES: KeyMode[] = ['single', 'batch', 'release', 'ready'];
 
+export interface DeleteResult {
+  /** The calculator answered with an F9 (refusal) frame. */
+  refused: boolean;
+  /** An F8 probe afterwards got no reply, so the object is gone. */
+  gone: boolean;
+}
+
 export interface BackupProgress {
   count: number;
   last?: PrimeFile;
@@ -250,6 +257,28 @@ export class PrimeSession {
         }
       }
       return files;
+    });
+  }
+
+  /**
+   * EB — delete one named object, then probe with F8 to confirm it is gone.
+   * The reply to EB is undocumented: an F9 frame is treated as a refusal, anything else
+   * (or silence) is logged, and the F8 probe decides.
+   */
+  deleteObject(type: number, name: string): Promise<DeleteResult> {
+    return this.exclusive(async () => {
+      let refused = false;
+      try {
+        const r = await this.exchange(C.deleteObject(type, name), 'delete reply', 1500);
+        if (r[0] === C.CMD.BACKUP) refused = true;
+        else log('info', `EB reply: ${hex(r, 12)}`);
+      } catch (e) {
+        if (!(e instanceof TimeoutError)) throw e;
+      }
+      if (refused) return { refused, gone: false };
+      await sleep(250);
+      const still = await this.requestFileUnlocked(type, name, 1500);
+      return { refused, gone: !still };
     });
   }
 

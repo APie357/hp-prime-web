@@ -1,9 +1,28 @@
 <script lang="ts">
   import type { TextKind } from '../lib/hid/session';
-  import { app, fetchObject, importObject, refreshCalcContents, syncClock } from '../lib/state.svelte';
+  import {
+    app,
+    backupToZip,
+    deleteCalcObject,
+    fetchObject,
+    importObject,
+    refreshCalcContents,
+    restoreFromZip,
+    sendChatMessage,
+    syncClock,
+  } from '../lib/state.svelte';
 
   let fetchName = $state('');
   let fetchKind = $state<TextKind>('program');
+  let chatText = $state('');
+  let restoreInput = $state<HTMLInputElement>();
+
+  function onRestorePick(e: Event) {
+    const input = e.currentTarget as HTMLInputElement;
+    const f = input.files?.[0];
+    input.value = '';
+    if (f) restoreFromZip(f);
+  }
 
   const programs = $derived(app.calcObjects.filter((o) => o.kind === 'program'));
   const notes = $derived(app.calcObjects.filter((o) => o.kind === 'note'));
@@ -32,6 +51,19 @@
         Sync clock
       </button>
     </div>
+    <div class="pad row">
+      <button onclick={backupToZip} disabled={!!app.busy} title="Download everything on the calculator as a .zip (full backup, ~20 s)">
+        Backup to .zip
+      </button>
+      <button
+        onclick={() => restoreInput?.click()}
+        disabled={!!app.busy}
+        title="Send the programs and notes from a backup .zip back to the calculator"
+      >
+        Restore…
+      </button>
+      <input bind:this={restoreInput} type="file" accept=".zip,application/zip" hidden onchange={onRestorePick} />
+    </div>
     <form
       class="pad row"
       onsubmit={(e) => {
@@ -47,6 +79,18 @@
       <button type="submit" disabled={!!app.busy || !fetchName.trim()}>Fetch</button>
     </form>
 
+    <form
+      class="pad row"
+      onsubmit={(e) => {
+        e.preventDefault();
+        sendChatMessage(chatText);
+        chatText = '';
+      }}
+    >
+      <input placeholder="Message to calculator (experimental)" bind:value={chatText} />
+      <button type="submit" disabled={!!app.busy || !chatText}>Send</button>
+    </form>
+
     <div class="lists">
       {#each [{ title: 'Programs', items: programs, kind: 'program' }, { title: 'Notes', items: notes, kind: 'note' }] as group (group.kind)}
         <h3 class="pad">{group.title} {#if app.calcListedAt}<span class="muted">({group.items.length})</span>{/if}</h3>
@@ -57,6 +101,12 @@
               {#if o.formatted}<span class="muted tag" title="Has rich-text formatting; only the plain text is edited">rich</span>{/if}
               <span class="muted size">{o.text.length} ch</span>
               <button onclick={() => importObject(o.kind, o.name, o.text)} title="Copy into workspace and open">Open</button>
+              <button
+                class="danger"
+                onclick={() => deleteCalcObject(o.kind, o.name)}
+                disabled={!!app.busy}
+                title="Delete from the calculator"
+                aria-label="Delete {o.name} from the calculator">✕</button>
             </li>
           {:else}
             <li class="muted">{app.calcListedAt ? `No ${group.title.toLowerCase()}` : 'Click “List contents” to read them'}</li>
@@ -140,5 +190,9 @@
   li button {
     font-size: 12px;
     padding: 1px 8px;
+  }
+  li button.danger:hover:not(:disabled) {
+    color: #f48771;
+    border-color: #f48771;
   }
 </style>

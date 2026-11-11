@@ -1,6 +1,8 @@
 /** Application state and actions shared by the components. */
 import { log } from './hid/log';
-import { decodeText, isValidName, KEY_MODES, PrimeSession, type KeyMode, type TextKind } from './hid/session';
+import { decodeText, isValidName, KEY_MODES, KIND_TYPE, PrimeSession, type KeyMode, type TextKind } from './hid/session';
+import type { PrimeFile } from './hid/parsers';
+import { backupFileName, buildBackupZip, readBackupZip } from './files/backup';
 import { grantedPrimes, requestPrime, WebHidPort, webHidSupported } from './hid/transport';
 import type { DeviceInfo } from './hid/parsers';
 import { ObjType } from './hid/commands';
@@ -142,26 +144,37 @@ export async function connect(): Promise<void> {
   await busy('Connecting', async () => {
     const granted = (await grantedPrimes())[0];
     const device = granted ?? (await requestPrime());
-    if (!device) return;
-    port = await WebHidPort.open(device);
-    port.pad = app.padReports;
-    session = new PrimeSession(port);
-    app.connected = true;
-    app.deviceLabel = port.label;
-    let ok = false;
-    try {
-      ok = await session.ready();
-    } catch (e) {
-      log('warn', `ready check: ${(e as Error).message}`);
-    }
-    try {
-      app.info = await session.info();
-    } catch (e) {
-      log('warn', `info: ${(e as Error).message}`);
-    }
-    const fw = app.info?.firmware ? ` · ${app.info.firmware}` : '';
-    setStatus(`Connected to ${app.deviceLabel}${fw}${ok ? '' : ' (no ready reply)'}`, ok ? 'ok' : 'info');
+    if (device) await openDevice(device);
   });
+}
+
+/** Open an already-granted calculator without a picker: on page load and when one is plugged in. */
+export async function autoConnect(): Promise<void> {
+  if (!app.hidSupported || app.connected || app.busy) return;
+  const device = (await grantedPrimes().catch(() => []))[0];
+  if (!device) return;
+  await busy('Reconnecting', () => openDevice(device));
+}
+
+async function openDevice(device: HIDDevice): Promise<void> {
+  port = await WebHidPort.open(device);
+  port.pad = app.padReports;
+  session = new PrimeSession(port);
+  app.connected = true;
+  app.deviceLabel = port.label;
+  let ok = false;
+  try {
+    ok = await session.ready();
+  } catch (e) {
+    log('warn', `ready check: ${(e as Error).message}`);
+  }
+  try {
+    app.info = await session.info();
+  } catch (e) {
+    log('warn', `info: ${(e as Error).message}`);
+  }
+  const fw = app.info?.firmware ? ` · ${app.info.firmware}` : '';
+  setStatus(`Connected to ${app.deviceLabel}${fw}${ok ? '' : ' (no ready reply)'}`, ok ? 'ok' : 'info');
 }
 
 export async function disconnect(): Promise<void> {
@@ -190,6 +203,10 @@ if (app.hidSupported) {
       screen.live = false;
       setStatus('Calculator unplugged', 'error');
     }
+  });
+  navigator.hid.addEventListener('connect', () => {
+    // A granted calculator was plugged (back) in; give it a moment to finish enumerating.
+    setTimeout(() => void autoConnect(), 800);
   });
 }
 
@@ -321,6 +338,89 @@ export async function syncClock(): Promise<void> {
     if (ok) setStatus(`Clock set to ${when} — check it on the calculator`, 'ok');
     else setStatus(`Clock sent (${when}), but the calculator didn't answer the follow-up ready check`, 'error');
   });
+}
+
+/** Delete a program or note on the calculator, after confirmation, and check that it's gone. */
+export async function deleteCalcObject(kind: TextKind, name: string): Promise<void> {
+  const what = `${kind} "${name}"`;
+  if (!confirm(`Delete ${what} from the calculator? This can't be undone (your workspace copy, if any, is kept).`)) return;
+  await busy(`Deleting ${name}`, async () => {
+    const r = await needSession().deleteObject(KIND_TYPE[kind], name);
+    if (r.refused) return setStatus(`The calculator refused to delete ${what}`, 'error');
+    if (!r.gone) return setStatus(`Sent delete for ${what}, but it still answers a fetch (see console)`, 'error');
+    app.calcObjects = app.calcObjects.filter((o) => !(o.kind === kind && o.name === name));
+    setStatus(`Deleted ${what} from the calculator ✓`, 'ok');
+  });
+}
+
+/** Read everything on the calculator (F9) and download it as a .zip. */
+export async function backupToZip(): Promise<void> {
+  await busy('Backing up', async () => {
+    setStatus('Reading the whole calculator for a backup (this can take ~20 s)…');
+    const files = await needSession().backup((p) => {
+      app.busy = `Backing up (${p.count} objects)`;
+    });
+    const now = new Date();
+    const device = { label: app.deviceLabel, name: app.info?.name, firmware: app.info?.firmware, serial: app.info?.serial };
+    const zip = buildBackupZip(files, device, now);
+    downloadBytes(zip, backupFileName(app.info?.name || app.deviceLabel, now), 'application/zip');
+    setStatus(`Backup saved: ${files.length} objects, ${(zip.length / 1024).toFixed(1)} KB`, 'ok');
+  });
+}
+
+/** Send the programs and notes in a backup .zip back to the calculator (other object types are skipped). */
+export async function restoreFromZip(zipFile: File): Promise<void> {
+  let parsed: ReturnType<typeof readBackupZip>;
+  try {
+    parsed = readBackupZip(new Uint8Array(await zipFile.arrayBuffer()));
+  } catch (e) {
+    return setStatus(`Can't read ${zipFile.name}: ${(e as Error).message}`, 'error');
+  }
+  const items = parsed.files
+    .map((f) => ({ f, kind: (f.type === ObjType.PROGRAM ? 'program' : f.type === ObjType.NOTE ? 'note' : null) as TextKind | null }))
+    .filter((x): x is { f: PrimeFile; kind: TextKind } => !!x.kind && isValidName(x.kind, x.f.name));
+  const skipped = parsed.files.length - items.length;
+  if (!items.length) return setStatus('The backup has no programs or notes to restore', 'error');
+  const list = items.map((x) => `${x.kind} ${x.f.name}`).join(', ');
+  if (
+    !confirm(
+      `Restore ${items.length} object(s) from ${zipFile.name} (made ${new Date(parsed.manifest.createdAt).toLocaleString()})?\n\n` +
+        `${list}\n\nObjects with the same name on the calculator are overwritten. ` +
+        `Notes are restored as plain text.${skipped ? ` ${skipped} other object(s) (apps, variables, settings) are skipped.` : ''}`,
+    )
+  )
+    return;
+  await busy('Restoring', async () => {
+    const s = needSession();
+    const failed: string[] = [];
+    for (const [i, { f, kind }] of items.entries()) {
+      app.busy = `Restoring ${f.name} (${i + 1}/${items.length})`;
+      const text = decodeText(kind, f.data).text;
+      const r = await s.sendText(kind, f.name, text, app.verifyAfterSend);
+      if (r.refused || r.verified === 'mismatch') failed.push(f.name);
+      else upsertCalc({ kind, name: f.name, text, formatted: false });
+    }
+    if (failed.length) setStatus(`Restored ${items.length - failed.length}/${items.length}; failed: ${failed.join(', ')}`, 'error');
+    else setStatus(`Restored ${items.length} object(s) from ${zipFile.name} ✓`, 'ok');
+  });
+}
+
+/** F2 chat message (experimental: what the calculator does with it is unverified). */
+export async function sendChatMessage(text: string): Promise<void> {
+  if (!text) return;
+  await busy('Sending message', async () => {
+    await needSession().sendChat(text);
+    setStatus(`Sent message "${text}" (experimental: check the calculator)`, 'ok');
+  });
+}
+
+function downloadBytes(data: Uint8Array, name: string, type: string): void {
+  const url = URL.createObjectURL(new Blob([data as Uint8Array<ArrayBuffer>], { type }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
 // ------------------------------------------------------ screen + keys
