@@ -57,6 +57,11 @@ The user confirmed on 2026-11-09 that connect, send, receive, list, and fetch wo
   - [ ] On the G2: does an RGBA PNG icon show in the Apps screen? (Dynatris's is a 4-bit palette PNG; convert if needed)
   - [ ] On the G2: does sending an app work? Does a new app (copied bag, new name) appear in the Apps screen? Does F8 fetch one app?
   - [ ] ▶ Run an app (deferred): e.g. send a helper program that calls `STARTAPP("Name")`, then start it like Send & Run
+- [x] Exam-mode configurations (type `0B`, `.hpexammode`, behind a setting): list, open, edit in a form, send; format in `docs/formats/exam-mode.md`
+  - [ ] **Set a password in the browser** (later). The 64-byte hash at 0x440 depends only on the password (blank and `1234` samples), but no standard hash matches. Tried: MD5, SHA-1/2/3, BLAKE2, HMAC, PBKDF2, up to 20,000 rounds, ASCII/UTF-16, padded, salted with the nearby bytes. It probably uses a secret key or salt from the firmware. Next step: reverse-engineer the Connectivity Kit's exam-mode editor (it can set passwords) or the G2 firmware. Until then: "Copy password from…" another configuration
+  - [ ] Does the checksum (0x41C) cover the name? Needs a copy of Custom Mode 1 under a different name. Renaming assumes it does
+  - [ ] On the G2: send an edited configuration; does the calculator accept it and show the change?
+  - [ ] Map more disabled features (only CAS so far, 0x040 bit 7): one copy per feature with only that feature disabled
 
 ## 3. Editor / language support (paused — resume later)
 - [x] Command catalog with signatures and docs (`src/lib/lang/catalog.ts`, all 163 commands from hpemu `builtins.rs`; not yet wired into the editor)
