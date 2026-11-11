@@ -155,7 +155,7 @@
   }
   .screen:focus-visible,
   .screen:focus {
-    border-color: #4c8dd8;
+    border-color: var(--focus);
   }
   canvas {
     width: 100%;
@@ -179,8 +179,8 @@
     font: inherit;
     font-size: 12px;
     color: var(--fg);
-    background: #3c3c3c;
-    border: 1px solid #4a4d52;
+    background: var(--input-bg);
+    border: 1px solid var(--input-border);
     border-radius: 4px;
     margin-left: auto;
   }
@@ -189,17 +189,17 @@
     font-size: 12px;
   }
   button.on {
-    background: #ffffff22;
+    background: var(--hover);
   }
   .ok {
-    color: #8bd17c;
+    color: var(--ok);
   }
   .bad {
-    color: #e07b7b;
+    color: var(--err);
   }
   .err {
     margin: 4px 10px 0;
     font-size: 12px;
-    color: #e07b7b;
+    color: var(--err);
   }
 </style>

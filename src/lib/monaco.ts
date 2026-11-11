@@ -86,4 +86,19 @@ monaco.editor.defineTheme('prime-dark', {
   colors: {},
 });
 
+monaco.editor.defineTheme('prime-light', {
+  base: 'vs',
+  inherit: true,
+  rules: [
+    { token: 'keyword', foreground: 'AF00DB', fontStyle: 'bold' },
+    { token: 'keyword.directive', foreground: '0070C1' },
+    { token: 'operator.assign', foreground: '9A6700' },
+    { token: 'number.hex', foreground: '098658' },
+    { token: 'predefined', foreground: '795E26' },
+  ],
+  colors: {},
+});
+
+export const monacoTheme = (t: 'light' | 'dark') => (t === 'light' ? 'prime-light' : 'prime-dark');
+
 export { monaco };

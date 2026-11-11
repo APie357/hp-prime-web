@@ -167,8 +167,8 @@
     font: inherit;
     font-size: 13px;
     color: var(--fg);
-    background: #3c3c3c;
-    border: 1px solid #4a4d52;
+    background: var(--input-bg);
+    border: 1px solid var(--input-border);
     border-radius: 4px;
   }
   dl {
@@ -240,7 +240,7 @@
     color: var(--muted);
   }
   .chat-log li.in .who {
-    color: #4ec9b0;
+    color: var(--teal);
   }
   .chat-log .text {
     flex: 1;
@@ -251,7 +251,7 @@
   .chat-log .help {
     font-family: inherit;
     font-style: italic;
-    color: #dcdcaa;
+    color: var(--hl);
   }
   h3 .help-btn {
     margin-left: 8px;
@@ -259,8 +259,8 @@
     padding: 0 6px;
     text-transform: none;
     letter-spacing: 0;
-    color: #dcdcaa;
-    border-color: #dcdcaa;
+    color: var(--hl);
+    border-color: var(--hl);
   }
   h3 .link {
     float: right;
@@ -276,7 +276,7 @@
     color: var(--fg);
   }
   li button.danger:hover:not(:disabled) {
-    color: #f48771;
-    border-color: #f48771;
+    color: var(--err);
+    border-color: var(--err);
   }
 </style>

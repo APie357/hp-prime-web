@@ -51,7 +51,46 @@ export const app = $state({
   chat: [] as ChatLine[],
   /** The calculator pressed Help in Messages and it hasn't been cleared from here. */
   helpPending: false,
+  /** Files open in editor tabs, in tab order. */
+  openFiles: [] as string[],
+  /** Side-by-side comparison waiting for the user (see `showDiff`). */
+  diff: null as DiffRequest | null,
 });
+
+export interface DiffAction {
+  id: string;
+  label: string;
+  primary?: boolean;
+}
+
+export interface DiffRequest {
+  title: string;
+  message?: string;
+  original: string;
+  modified: string;
+  originalLabel: string;
+  modifiedLabel: string;
+  /** Monaco language id for highlighting. */
+  language: string;
+  actions: DiffAction[];
+  resolve: (action: string | null) => void;
+}
+
+/** Show two texts side by side; resolves with the chosen action id, or null when dismissed. */
+export function showDiff(req: Omit<DiffRequest, 'resolve'>): Promise<string | null> {
+  app.diff?.resolve(null);
+  return new Promise((resolve) => {
+    app.diff = { ...req, resolve };
+  });
+}
+
+export function closeDiff(action: string | null): void {
+  const d = app.diff;
+  app.diff = null;
+  d?.resolve(action);
+}
+
+const langFor = (file: string) => (kindFromFile(file) === 'note' ? 'plaintext' : 'hpppl');
 
 export interface ChatLine {
   dir: 'in' | 'out';
@@ -129,6 +168,8 @@ export const editorBridge = {
   getText: (_file: string): string | null => null,
   setText: (_file: string, _text: string): void => {},
   forget: (_file: string): void => {},
+  /** Move an open file's model to a new name (keeps undo history where possible). */
+  rename: (_from: string, _to: string): void => {},
 };
 
 function setStatus(text: string, kind: 'info' | 'ok' | 'error' = 'info') {
@@ -289,7 +330,17 @@ export async function sendCurrent(): Promise<boolean> {
         return true;
       case 'mismatch':
         log('warn', `read-back differs:\n${r.readback}`);
-        setStatus(`Sent ${name}, but the read-back differs (see console)`, 'error');
+        setStatus(`Sent ${name}, but the read-back differs`, 'error');
+        void showDiff({
+          title: `Read-back of ${name} differs`,
+          message: 'Left: what was sent. Right: what the calculator returned.',
+          original: text,
+          modified: r.readback ?? '',
+          originalLabel: 'Sent',
+          modifiedLabel: 'Calculator',
+          language: langFor(file),
+          actions: [{ id: 'close', label: 'Close', primary: true }],
+        });
         return false;
       case 'no-reply':
         setStatus(`Sent ${name} (${r.bytes} B); read-back got no reply`, 'error');
@@ -349,13 +400,29 @@ export async function importObject(kind: TextKind, name: string, text: string): 
   if (await ws.exists(file)) {
     const local = app.current === file ? editorBridge.getText(file) : await ws.read(file);
     if (local !== null && local.replace(/\r\n?/g, '\n') !== text.replace(/\r\n?/g, '\n')) {
-      if (!confirm(`${file} already exists locally and differs. Replace it with the calculator's version?`)) return;
+      const choice = await showDiff({
+        title: `${file} differs from the calculator's copy`,
+        message: 'Left: your local file. Right: the calculator.',
+        original: local,
+        modified: text,
+        originalLabel: 'Local',
+        modifiedLabel: 'Calculator',
+        language: langFor(file),
+        actions: [
+          { id: 'keep', label: 'Keep local' },
+          { id: 'replace', label: "Use calculator's version", primary: true },
+        ],
+      });
+      if (choice !== 'replace') {
+        if (choice === 'keep') openFile(file);
+        return;
+      }
     }
   }
-  await ws.write(file, text);
+  await writeTracked(file, text);
   editorBridge.setText(file, text);
   await refreshFiles();
-  app.current = file;
+  openFile(file);
 }
 
 /** Set the calculator's clock to this computer's local time. */
@@ -635,8 +702,11 @@ async function setWorkspace(ws: Workspace) {
   app.workspaceKind = ws.kind;
   app.needsPermission = false;
   app.current = null;
+  app.openFiles = [];
   app.dirty = [];
+  known.clear();
   await refreshFiles();
+  restoreTabs();
 }
 
 export async function initWorkspace(): Promise<void> {
@@ -677,7 +747,10 @@ export async function refreshFiles(): Promise<void> {
 }
 
 export async function readFile(file: string): Promise<string> {
-  return (await ensureWorkspace()).read(file);
+  const ws = await ensureWorkspace();
+  const [text, t] = await Promise.all([ws.read(file), ws.stat(file)]);
+  if (t !== null) known.set(file, t);
+  return text;
 }
 
 export async function newFile(kind: TextKind = 'program'): Promise<void> {
@@ -692,18 +765,191 @@ export async function newFile(kind: TextKind = 'program'): Promise<void> {
   if (await ws.exists(file)) return setStatus(`${file} already exists`, 'error');
   const template =
     kind === 'program' ? `EXPORT ${name}()\nBEGIN\n  PRINT();\n  PRINT("Hello from ${name}");\nEND;\n` : '';
-  await ws.write(file, template);
+  await writeTracked(file, template);
   await refreshFiles();
-  app.current = file;
+  openFile(file);
 }
 
 export async function deleteFile(file: string): Promise<void> {
   if (!confirm(`Delete ${file} from ${app.workspaceLabel}? (The calculator copy is not affected.)`)) return;
   await (await ensureWorkspace()).remove(file);
+  dropTab(file);
   editorBridge.forget(file);
-  if (app.current === file) app.current = null;
+  known.delete(file);
   app.dirty = app.dirty.filter((f) => f !== file);
   await refreshFiles();
+}
+
+/** Rename a workspace file (the extension, and so the kind, stays the same). */
+export async function renameFile(file: string): Promise<void> {
+  const kind = kindFromFile(file);
+  const ext = file.slice(programNameFromFile(file).length);
+  const oldName = programNameFromFile(file);
+  const name = prompt(`Rename ${file} to:`, oldName)?.trim();
+  if (!name || name === oldName) return;
+  if (!isValidName(kind, name)) return setStatus(`"${name}" is not a valid ${kind} name`, 'error');
+  const to = name + ext;
+  const ws = await ensureWorkspace();
+  // Allow a case-only rename of the same file; otherwise refuse to overwrite.
+  if (to.toLowerCase() !== file.toLowerCase() && (await ws.exists(to))) return setStatus(`${to} already exists`, 'error');
+  try {
+    if (app.dirty.includes(file)) await saveFile(file);
+    await ws.rename(file, to);
+  } catch (e) {
+    return setStatus(`Rename failed: ${(e as Error).message}`, 'error');
+  }
+  editorBridge.rename(file, to);
+  known.delete(file);
+  void ws.stat(to).then((t) => t !== null && known.set(to, t));
+  app.openFiles = app.openFiles.map((f) => (f === file ? to : f));
+  app.dirty = app.dirty.map((f) => (f === file ? to : f));
+  if (app.current === file) app.current = to;
+  saveTabs();
+  await refreshFiles();
+  setStatus(`Renamed ${file} → ${to}${kind === 'program' ? ' (the calculator copy keeps its old name until you send it)' : ''}`, 'ok');
+}
+
+// --------------------------------------------------------------- tabs
+
+/** Open a file in a tab (or switch to its tab). */
+export function openFile(file: string): void {
+  if (!app.openFiles.includes(file)) app.openFiles = [...app.openFiles, file];
+  app.current = file;
+  saveTabs();
+}
+
+/** Close a tab, saving first. The neighbouring tab becomes current. */
+export async function closeFile(file: string): Promise<void> {
+  if (app.dirty.includes(file)) await saveFile(file);
+  dropTab(file);
+  editorBridge.forget(file);
+}
+
+function dropTab(file: string): void {
+  const i = app.openFiles.indexOf(file);
+  if (i < 0) {
+    if (app.current === file) app.current = null;
+    return;
+  }
+  app.openFiles = app.openFiles.filter((f) => f !== file);
+  if (app.current === file) app.current = app.openFiles[Math.min(i, app.openFiles.length - 1)] ?? null;
+  saveTabs();
+}
+
+export function moveTab(file: string, to: number): void {
+  const rest = app.openFiles.filter((f) => f !== file);
+  rest.splice(Math.max(0, Math.min(to, rest.length)), 0, file);
+  app.openFiles = rest;
+  saveTabs();
+}
+
+const tabsKey = () => `tabs:${app.workspaceKind}:${app.workspaceLabel}`;
+
+function saveTabs(): void {
+  if (!app.workspaceKind) return;
+  saveString(tabsKey(), JSON.stringify({ open: app.openFiles, current: app.current }));
+}
+
+function restoreTabs(): void {
+  try {
+    const t = JSON.parse(loadString(tabsKey()) ?? 'null') as { open: string[]; current: string | null } | null;
+    if (!t) return;
+    app.openFiles = t.open.filter((f) => app.files.includes(f));
+    app.current = t.current && app.openFiles.includes(t.current) ? t.current : (app.openFiles[0] ?? null);
+  } catch {
+    /* ignore a bad entry */
+  }
+}
+
+// ------------------------------------------------- outside changes
+
+/** Last-modified time of each file as this app last read or wrote it. */
+const known = new Map<string, number>();
+
+/** Files this app is writing right now; the outside-change check leaves them alone. */
+const writing = new Set<string>();
+
+async function writeTracked(file: string, text: string): Promise<void> {
+  const ws = await ensureWorkspace();
+  writing.add(file);
+  try {
+    await ws.write(file, text);
+    const t = await ws.stat(file);
+    if (t !== null) known.set(file, t);
+  } finally {
+    writing.delete(file);
+  }
+}
+
+/**
+ * Look for edits made outside the app (folder workspaces only): new or removed files, and changes
+ * to open files. A clean file is reloaded; one with unsaved edits asks which version to keep.
+ */
+let checking = false;
+export async function checkExternalChanges(): Promise<void> {
+  if (checking || !workspace || workspace.kind !== 'folder' || app.diff) return;
+  checking = true;
+  try {
+    const list = await workspace.list();
+    if (list.join('\n') !== app.files.join('\n')) {
+      app.files = list;
+      for (const f of [...app.openFiles]) if (!list.includes(f)) {
+        log('warn', `${f} was removed outside the app; its tab stays open until closed`);
+      }
+    }
+    for (const file of app.openFiles) {
+      if (!list.includes(file) || writing.has(file)) continue;
+      const t = await workspace.stat(file);
+      const k = known.get(file);
+      if (t === null || k === undefined || t === k) continue;
+      const disk = await workspace.read(file);
+      if (writing.has(file)) continue;
+      known.set(file, t);
+      const mine = editorBridge.getText(file);
+      if (mine === null || mine === disk) continue;
+      if (!app.dirty.includes(file)) {
+        editorBridge.setText(file, disk);
+        setStatus(`Reloaded ${file}: it changed on disk`);
+        continue;
+      }
+      await resolveConflict(file, mine, disk);
+    }
+  } catch (e) {
+    log('warn', `checking for outside changes: ${(e as Error).message}`);
+  } finally {
+    checking = false;
+  }
+}
+
+async function resolveConflict(file: string, mine: string, disk: string): Promise<void> {
+  const choice = await showDiff({
+    title: `${file} changed on disk`,
+    message: 'It was edited outside the app while you had unsaved changes here. Left: on disk. Right: yours.',
+    original: disk,
+    modified: mine,
+    originalLabel: 'On disk',
+    modifiedLabel: 'Yours',
+    language: langFor(file),
+    actions: [
+      { id: 'disk', label: 'Use disk version' },
+      { id: 'mine', label: 'Keep mine', primary: true },
+    ],
+  });
+  if (choice === 'disk') {
+    editorBridge.setText(file, disk);
+    app.dirty = app.dirty.filter((f) => f !== file);
+  } else if (choice === 'mine') {
+    await writeTracked(file, editorBridge.getText(file) ?? mine);
+    app.dirty = app.dirty.filter((f) => f !== file);
+  }
+  // Dismissed: leave both alone; the next save asks again.
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('focus', () => void checkExternalChanges());
+  setInterval(() => {
+    if (document.visibilityState === 'visible') void checkExternalChanges();
+  }, 3000);
 }
 
 export function markDirty(file: string) {
@@ -713,7 +959,18 @@ export function markDirty(file: string) {
 export async function saveFile(file: string): Promise<void> {
   const text = editorBridge.getText(file);
   if (text === null || !workspace) return;
-  await workspace.write(file, text);
+  const k = known.get(file);
+  if (k !== undefined) {
+    const t = await workspace.stat(file);
+    if (t !== null && t !== k) {
+      const disk = await workspace.read(file);
+      if (disk !== text) {
+        if (!app.diff) await resolveConflict(file, text, disk);
+        return;
+      }
+    }
+  }
+  await writeTracked(file, text);
   app.dirty = app.dirty.filter((f) => f !== file);
 }
 

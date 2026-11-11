@@ -5,10 +5,32 @@
   import CalcPanel from './components/CalcPanel.svelte';
   import ScreenPanel from './components/ScreenPanel.svelte';
   import Console from './components/Console.svelte';
+  import Splitter from './components/Splitter.svelte';
+  import DiffView from './components/DiffView.svelte';
+  import { cycleTheme, resetSize, resolvedTheme, saveLayout, setSize, ui, type Layout } from './lib/ui.svelte';
   import { app, autoConnect, connect, disconnect, initWorkspace, sendAndRun, sendCurrent, toggleConsole } from './lib/state.svelte';
   import { kindFromFile, programNameFromFile } from './lib/files/workspace';
 
   const isProgram = $derived(!!app.current && kindFromFile(app.current) === 'program');
+
+  // Theme: data-theme on <html> only when chosen explicitly; Auto follows the system via CSS.
+  $effect(() => {
+    if (ui.theme === 'auto') delete document.documentElement.dataset.theme;
+    else document.documentElement.dataset.theme = ui.theme;
+  });
+
+  const themeIcon = $derived(ui.theme === 'auto' ? '◐' : ui.theme === 'light' ? '☀' : '☾');
+
+  // Panel resizing: remember the size when a drag starts and apply the pointer delta.
+  let startSize = 0;
+  function resizer(k: keyof Layout, sign: 1 | -1) {
+    return {
+      onstart: () => (startSize = ui.layout[k]),
+      ondrag: (d: number) => setSize(k, startSize + sign * d),
+      onend: saveLayout,
+      onreset: () => resetSize(k),
+    };
+  }
 
   onMount(() => {
     initWorkspace();
@@ -40,6 +62,12 @@
     {/if}
     <span class="spacer"></span>
     <button
+      class="theme"
+      onclick={cycleTheme}
+      title="Theme: {ui.theme === 'auto' ? `Auto (${resolvedTheme()})` : ui.theme} — click to change"
+      aria-label="Theme: {ui.theme}">{themeIcon}</button
+    >
+    <button
       class="primary"
       onclick={sendCurrent}
       disabled={!app.connected || !app.current || !!app.busy}
@@ -63,14 +91,23 @@
     </div>
   {/if}
 
-  <main>
+  <main style:grid-template-columns="{ui.layout.left}px auto minmax(0, 1fr) auto {ui.layout.right}px">
     <aside class="left"><FileList /></aside>
+    <Splitter dir="x" label="Resize file list" {...resizer('left', 1)} />
     <div class="center"><Editor /></div>
+    <Splitter dir="x" label="Resize calculator panel" {...resizer('right', -1)} />
     <aside class="right"><ScreenPanel /><CalcPanel /></aside>
   </main>
 
   {#if app.showConsole}
-    <div class="bottom"><Console /></div>
+    <div class="bottom" style:height="{ui.layout.console}px">
+      <Splitter dir="y" label="Resize console" {...resizer('console', -1)} />
+      <Console />
+    </div>
+  {/if}
+
+  {#if app.diff}
+    {#key app.diff}<DiffView req={app.diff} />{/key}
   {/if}
 
   <footer class="status {app.statusKind}">
@@ -118,7 +155,7 @@
     color: var(--muted);
   }
   .dev.ok {
-    color: #8bd17c;
+    color: var(--ok);
   }
   .spacer {
     flex: 1;
@@ -131,8 +168,11 @@
   }
   main {
     display: grid;
-    grid-template-columns: 220px 1fr 340px;
     min-height: 0;
+  }
+  .theme {
+    width: 30px;
+    padding: 3px 0;
   }
   .left,
   .right {
@@ -140,11 +180,7 @@
     display: flex;
     background: var(--panel);
   }
-  .left {
-    border-right: 1px solid var(--border);
-  }
   .right {
-    border-left: 1px solid var(--border);
     flex-direction: column;
     overflow-y: auto;
   }
@@ -153,8 +189,12 @@
     min-height: 0;
   }
   .bottom {
-    border-top: 1px solid var(--border);
-    height: 200px;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .bottom > :global(.console) {
+    flex: 1;
     min-height: 0;
   }
   .status {

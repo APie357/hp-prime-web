@@ -1,8 +1,21 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { monaco, PPL } from '../lib/monaco';
+  import { monaco, monacoTheme, PPL } from '../lib/monaco';
+  import { resolvedTheme } from '../lib/ui.svelte';
   import { kindFromFile } from '../lib/files/workspace';
-  import { app, editorBridge, markDirty, readFile, saveFile, sendAndRun, sendCurrent } from '../lib/state.svelte';
+  import {
+    app,
+    closeFile,
+    editorBridge,
+    markDirty,
+    moveTab,
+    openFile,
+    readFile,
+    renameFile,
+    saveFile,
+    sendAndRun,
+    sendCurrent,
+  } from '../lib/state.svelte';
 
   let host: HTMLDivElement;
   let editor: monaco.editor.IStandaloneCodeEditor | undefined;
@@ -35,13 +48,45 @@
     }
   };
   editorBridge.forget = (file) => {
+    clearTimeout(saveTimers.get(file));
+    saveTimers.delete(file);
+    viewStates.delete(file);
     models.get(file)?.dispose();
     models.delete(file);
   };
+  editorBridge.rename = (from, to) => {
+    const m = models.get(from);
+    if (!m) return;
+    const text = m.getValue();
+    const view = editor?.getModel() === m ? editor.saveViewState() : viewStates.get(from);
+    editorBridge.forget(from);
+    modelFor(to, text);
+    if (view) viewStates.set(to, view);
+  };
+
+  /** Cursor and scroll position per file, restored when switching tabs. */
+  const viewStates = new Map<string, monaco.editor.ICodeEditorViewState | null>();
+  let shown: string | null = null;
+
+  function show(file: string, m: monaco.editor.ITextModel) {
+    if (shown && shown !== file && models.has(shown)) viewStates.set(shown, editor!.saveViewState());
+    editor!.setModel(m);
+    const v = viewStates.get(file);
+    if (v) editor!.restoreViewState(v);
+    shown = file;
+    editor!.focus();
+  }
+
+  $effect(() => {
+    monaco.editor.setTheme(monacoTheme(resolvedTheme()));
+  });
+
+  // Tab drag-and-drop reordering.
+  let dragged: string | null = null;
 
   onMount(() => {
     editor = monaco.editor.create(host, {
-      theme: 'prime-dark',
+      theme: monacoTheme(resolvedTheme()),
       automaticLayout: true,
       fontSize: 14,
       tabSize: 2,
@@ -80,6 +125,8 @@
     const file = app.current;
     if (!editor) return;
     if (!file) {
+      if (shown && models.has(shown)) viewStates.set(shown, editor.saveViewState());
+      shown = null;
       editor.setModel(null);
       return;
     }
@@ -87,18 +134,70 @@
     editor.updateOptions({ wordWrap: kindFromFile(file) === 'note' ? 'on' : 'off' });
     const existing = models.get(file);
     if (existing) {
-      editor.setModel(existing);
-      editor.focus();
+      show(file, existing);
       return;
     }
     readFile(file).then((text) => {
       if (app.current !== file) return;
-      editor!.setModel(modelFor(file, text));
-      editor!.focus();
+      show(file, modelFor(file, text));
     });
   });
 </script>
 
+<div class="editor-col">
+{#if app.openFiles.length}
+  <div class="tabs" role="tablist" aria-label="Open files">
+    {#each app.openFiles as f, i (f)}
+      <div
+        class="tab"
+        class:active={app.current === f}
+        role="tab"
+        tabindex="0"
+        aria-selected={app.current === f}
+        title="{f} (double-click to rename, middle-click to close)"
+        draggable="true"
+        onclick={() => openFile(f)}
+        onkeydown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            openFile(f);
+          }
+        }}
+        ondblclick={() => renameFile(f)}
+        onauxclick={(e) => {
+          if (e.button === 1) {
+            e.preventDefault();
+            closeFile(f);
+          }
+        }}
+        ondragstart={(e) => {
+          dragged = f;
+          e.dataTransfer?.setData('text/plain', f);
+        }}
+        ondragover={(e) => dragged && e.preventDefault()}
+        ondrop={(e) => {
+          e.preventDefault();
+          if (dragged && dragged !== f) moveTab(dragged, i);
+          dragged = null;
+        }}
+        ondragend={() => (dragged = null)}
+      >
+        <span class="icon">{kindFromFile(f) === 'note' ? '✎' : '▸'}</span>
+        <span class="name">{f}</span>
+        <button
+          class="close"
+          class:dirty={app.dirty.includes(f)}
+          title={app.dirty.includes(f) ? 'Unsaved changes (saved on close)' : 'Close'}
+          aria-label="Close {f}"
+          onclick={(e) => {
+            e.stopPropagation();
+            closeFile(f);
+          }}
+        ><span class="x">✕</span><span class="d">●</span></button>
+      </div>
+    {/each}
+  </div>
+{/if}
 <div class="editor-wrap">
   {#if !app.current}
     <div class="empty">
@@ -110,12 +209,83 @@
   {/if}
   <div class="editor" bind:this={host}></div>
 </div>
+</div>
 
 <style>
-  .editor-wrap {
-    position: relative;
+  .editor-col {
+    display: flex;
+    flex-direction: column;
     height: 100%;
     min-height: 0;
+  }
+  .editor-wrap {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+  }
+  .tabs {
+    display: flex;
+    overflow-x: auto;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    scrollbar-width: thin;
+  }
+  .tab {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 4px 0 10px;
+    height: 32px;
+    font-size: 13px;
+    font-family: var(--mono);
+    color: var(--muted);
+    border-right: 1px solid var(--border);
+    cursor: pointer;
+    white-space: nowrap;
+    user-select: none;
+  }
+  .tab:hover {
+    background: var(--hover);
+  }
+  .tab.active {
+    background: var(--bg);
+    color: var(--fg);
+    box-shadow: inset 0 2px 0 var(--accent);
+  }
+  .tab:focus-visible {
+    outline: 1px solid var(--focus);
+    outline-offset: -1px;
+  }
+  .tab .icon {
+    color: var(--muted);
+  }
+  .close {
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 11px;
+  }
+  .close:hover:not(:disabled) {
+    background: var(--hover);
+    color: var(--fg);
+  }
+  .close .d {
+    display: none;
+    color: var(--accent);
+  }
+  .close.dirty:not(:hover) .x {
+    display: none;
+  }
+  .close.dirty:not(:hover) .d {
+    display: inline;
+  }
+  .tab:not(.active):not(:hover) .close:not(.dirty) .x {
+    visibility: hidden;
   }
   .editor {
     position: absolute;

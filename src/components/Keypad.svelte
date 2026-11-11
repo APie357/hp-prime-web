@@ -81,7 +81,11 @@
   .row.six {
     grid-template-columns: repeat(6, 1fr);
   }
+  /* Keys look like the calculator's in both themes. */
   .key {
+    background: #3a3d41;
+    border-color: #4a4d52;
+    color: #e6e6e6;
     position: relative;
     font-size: 11px;
     padding: 4px 2px 7px;
@@ -89,6 +93,9 @@
     white-space: nowrap;
     overflow: hidden;
     line-height: 1.1;
+  }
+  .key:hover:not(:disabled) {
+    background: #4a4e54;
   }
   .dpad .key {
     padding: 0;

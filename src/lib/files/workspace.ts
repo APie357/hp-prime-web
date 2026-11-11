@@ -12,6 +12,9 @@ export interface Workspace {
   write(name: string, text: string): Promise<void>;
   remove(name: string): Promise<void>;
   exists(name: string): Promise<boolean>;
+  rename(from: string, to: string): Promise<void>;
+  /** Last-modified time, for spotting edits made outside the app; null when unknown/missing. */
+  stat(name: string): Promise<number | null>;
 }
 
 export const SOURCE_EXT = '.hpppl';
@@ -79,6 +82,26 @@ export class FolderWorkspace implements Workspace {
       return false;
     }
   }
+
+  async rename(from: string, to: string): Promise<void> {
+    const h = (await this.dir.getFileHandle(from)) as FileSystemFileHandle & {
+      move?: (name: string) => Promise<void>;
+    };
+    if (h.move) {
+      await h.move(to);
+      return;
+    }
+    await this.write(to, await this.read(from));
+    await this.remove(from);
+  }
+
+  async stat(name: string): Promise<number | null> {
+    try {
+      return (await (await this.dir.getFileHandle(name)).getFile()).lastModified;
+    } catch {
+      return null;
+    }
+  }
 }
 
 export function folderAccessSupported(): boolean {
@@ -112,6 +135,14 @@ export class BrowserWorkspace implements Workspace {
   }
   async exists(name: string): Promise<boolean> {
     return (await get(name, fileStore)) !== undefined;
+  }
+  async rename(from: string, to: string): Promise<void> {
+    await set(to, await this.read(from), fileStore);
+    await del(from, fileStore);
+  }
+  /** Only this app writes browser storage, so there are no outside changes to detect. */
+  async stat(): Promise<number | null> {
+    return null;
   }
 }
 

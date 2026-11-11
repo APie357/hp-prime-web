@@ -112,22 +112,22 @@
     color: var(--muted);
   }
   .out .k {
-    color: #6fb3ff;
+    color: var(--info);
   }
   .in .k {
-    color: #8bd17c;
+    color: var(--ok);
   }
   .warn .x {
-    color: #e5c07b;
+    color: var(--warn);
   }
   .error .x {
-    color: #f07178;
+    color: var(--err);
   }
   .ok .x {
-    color: #8bd17c;
+    color: var(--ok);
   }
   .out .x,
   .in .x {
-    color: #a9b1c1;
+    color: var(--packet);
   }
 </style>

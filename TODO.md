@@ -62,12 +62,14 @@ The user confirmed on 2026-11-09 that connect, send, receive, list, and fetch wo
 - [ ] Try all language features in a browser (completion, hover, signature help, outline, go-to-definition, folding, lint markers, formatter, highlighting) — deferred: no room for a headless Chromium on the dev machine
 
 ## 4. Workspace / UI
-- [ ] Rename files
-- [ ] Tabs for several open files
-- [ ] Show a diff when the read-back mismatches, or when importing over a local file that differs
-- [ ] Detect external changes to files in an opened folder
-- [ ] Resizable panels; persist the layout
-- [ ] Light theme
+Built 2026-11-10; not yet tried in a browser (no headless Chromium on the dev machine):
+- [x] Rename files: ✏ (or F2) in the file list, or double-click a tab; the extension, and so the kind, stays
+- [x] Tabs for several open files: close with ✕ or middle-click (saves first), drag to reorder, ● for unsaved; cursor/scroll kept per tab; open tabs remembered per workspace
+- [x] Diff view (`DiffView.svelte`, Monaco diff editor): when the read-back mismatches, and when importing over a local file that differs (Keep local / Use calculator's version)
+- [x] Detect outside changes in an opened folder (on window focus and every 3 s): the file list updates; a clean open file reloads; one with unsaved edits shows a diff (Use disk version / Keep mine); saving never overwrites an outside edit without asking
+- [x] Resizable file list, calculator panel and console (drag the edges, arrow keys when focused, double-click to reset); sizes remembered
+- [x] Light theme: ◐/☀/☾ button cycles Auto (follows the system) → Light → Dark; Monaco follows; the keypad stays calculator-coloured
+- [ ] Try all of the above in Chrome
 
 ## 5. Build / infra
 - [ ] Shrink the Monaco bundle (currently about 4 MB; `register.all` pulls in every contribution)

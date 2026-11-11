@@ -4,6 +4,8 @@
     app,
     deleteFile,
     newFile,
+    openFile,
+    renameFile,
     openBrowserStorage,
     openFolder,
     refreshFiles,
@@ -42,10 +44,21 @@
   <ul>
     {#each app.files as f (f)}
       <li class:active={app.current === f}>
-        <button class="file" onclick={() => (app.current = f)} title={f}>
+        <button
+          class="file"
+          onclick={() => openFile(f)}
+          onkeydown={(e) => {
+            if (e.key === 'F2') {
+              e.preventDefault();
+              renameFile(f);
+            }
+          }}
+          title="{f} (F2 to rename)"
+        >
           <span class="icon" title={kindFromFile(f)}>{kindFromFile(f) === 'note' ? '✎' : '▸'}</span>{f}{#if app.dirty.includes(f)}<span class="dot">●</span>{/if}
         </button>
-        <button class="del" title="Delete" onclick={() => deleteFile(f)}>✕</button>
+        <button class="act" title="Rename (F2)" aria-label="Rename {f}" onclick={() => renameFile(f)}>✏</button>
+        <button class="act" title="Delete" aria-label="Delete {f}" onclick={() => deleteFile(f)}>✕</button>
       </li>
     {:else}
       <li class="none">No files yet</li>
@@ -103,13 +116,19 @@
     font-family: var(--mono);
     font-size: 13px;
   }
-  .del {
+  .act {
     visibility: hidden;
     background: none;
     border: none;
+    padding: 3px 5px;
     color: var(--muted);
   }
-  li:hover .del {
+  .act:hover:not(:disabled) {
+    background: var(--hover);
+    color: var(--fg);
+  }
+  li:hover .act,
+  li:focus-within .act {
     visibility: visible;
   }
   .icon {
