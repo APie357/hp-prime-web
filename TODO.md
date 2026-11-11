@@ -39,7 +39,7 @@ The user confirmed on 2026-11-09 that connect, send, receive, list, and fetch wo
 - [x] Chat (`F2`): send and receive, with a chat log in the Calculator panel
   - [x] On the G2: sent messages appear on the calculator, and its replies arrive as `F2 01 len(u32BE) UTF-16LE text 00 00`
   - [x] Receiving works in the web UI (idle listener); the Help softkey shows as a help request
-  - [ ] Check receiving while the live screen is on
+  - [x] Receiving (messages and Help) also works while the live screen is on (G2, 2026-11-10)
   - [x] Clear the calculator's **Help•** flag: send the same empty chat back (`F2 01 00000002 00 00`, verified on the G2) → **✋ Clear help** button in the Chat section
 - [x] Full backup to a `.zip` (`src/lib/files/backup.ts`: `manifest.json`, `raw/<type>/<name>.bin` for every object, readable `programs/` and `notes/`)
 - [x] Restore programs and notes from a backup `.zip` (through the verified send path; other object types are skipped)
