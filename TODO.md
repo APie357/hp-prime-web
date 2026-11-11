@@ -68,6 +68,8 @@ The user confirmed on 2026-11-09 that connect, send, receive, list, and fetch wo
 - [x] Assignment shortcuts: **Alt+=** types `:=`, **Alt+.** types `▶` (editor actions, PPL files only; also in the F1 command palette). Not yet tried in a browser
 - [x] Formatter (`src/lib/lang/format.ts`; Shift+Alt+F or right-click → Format Document): re-indents by block, upper-cases keywords, trims trailing whitespace, collapses blank lines; leaves strings, comments, command case and `#cas…#end` alone. Unit-tested, not yet tried in a browser
 - [x] Highlight built-in commands (case-sensitive, so lower-case CAS calls and user variables aren't colored as commands); not yet tried in a browser
+- [x] `#PYTHON name()` … `#END` blocks: highlighted as Python (Monarch embedded language); one directive token for the lexer, so lint, outline and formatter skip them (formatter keeps them verbatim)
+  - [ ] Completion/hover inside Python blocks still offer PPL items
 - [ ] Try all language features in a browser (completion, hover, signature help, outline, go-to-definition, folding, lint markers, formatter, highlighting) — deferred: no room for a headless Chromium on the dev machine
 
 ## 4. Workspace / UI

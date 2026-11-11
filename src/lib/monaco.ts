@@ -54,6 +54,8 @@ monaco.languages.setMonarchTokensProvider(PPL, {
   tokenizer: {
     root: [
       [/\/\/.*$/, 'comment'],
+      // #PYTHON name() … #END: highlight the block as Python.
+      [/#[Pp][Yy][Tt][Hh][Oo][Nn]\b.*$/, { token: 'keyword.directive', next: '@python', nextEmbedded: 'python' }],
       [/#([Pp][Rr][Aa][Gg][Mm][Aa]|[Cc][Aa][Ss]|[Ee][Nn][Dd]).*$/, 'keyword.directive'],
       [/"/, 'string', '@string'],
       [/#[0-9A-Fa-f]+[hbodHBOD]?(:\d+)?/, 'number.hex'],
@@ -63,6 +65,9 @@ monaco.languages.setMonarchTokensProvider(PPL, {
       [/[<>]=?|==|≠|≤|≥|<>|[-+*/^=]/, 'operator'],
       [/[()[\]{}]/, '@brackets'],
       [/[;,]/, 'delimiter'],
+    ],
+    python: [
+      [/^\s*#[Ee][Nn][Dd]\b.*$/, { token: 'keyword.directive', next: '@pop', nextEmbedded: '@pop' }],
     ],
     string: [
       [/[^"\\]+/, 'string'],

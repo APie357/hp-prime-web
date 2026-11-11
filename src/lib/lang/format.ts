@@ -30,7 +30,11 @@ export function formatPpl(input: string, opts: FormatOptions): string {
   let casStart = 0;
   for (const t of toks) {
     if (t.type === 'pragma') {
-      if (/^#cas\b/i.test(t.text)) casStart = t.line;
+      // A #PYTHON block (one token, see lexer.ts) is copied as is: indentation is Python syntax.
+      if (/^#python\b/i.test(t.text)) {
+        const n = t.text.split('\n').length - 1;
+        for (let l = t.line; l <= t.line + n; l++) verbatim.add(l);
+      } else if (/^#cas\b/i.test(t.text)) casStart = t.line;
       else if (/^#end\b/i.test(t.text) && casStart) {
         for (let l = casStart + 1; l < t.line; l++) verbatim.add(l);
         casStart = 0;
