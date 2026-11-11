@@ -56,6 +56,7 @@ The user confirmed on 2026-11-09 that connect, send, receive, list, and fetch wo
   - [x] App icon (`icon.png`, 38×38 like Dynatris's): 🖼 on the app row or in New app; any image is center-cropped and scaled
   - [ ] On the G2: does an RGBA PNG icon show in the Apps screen? (Dynatris's is a 4-bit palette PNG; convert if needed)
   - [ ] On the G2: does sending an app work? Does a new app (copied bag, new name) appear in the Apps screen? Does F8 fetch one app?
+  - [x] New → Python creates a script in `&Python.hpappdir/` (the folder is made if missing)
   - [x] Python app scripts: list them (Calculator panel → Python scripts), open one into `&Python.hpappdir/`, send one back (only that file changes; the live app is fetched first), delete one
   - [ ] On the G2: are the Python app's scripts its extra files (does `main.py` show up)? Does sending one script work, and do the other scripts survive? Does F8 fetch `&Python`?
   - [ ] ▶ Run an app (deferred): e.g. send a helper program that calls `STARTAPP("Name")`, then start it like Send & Run

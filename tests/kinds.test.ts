@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decodeTextFile, decodeTextFor, encodeTextFor, fileType, languageFor, parseNewName, programNameFromFile } from '../src/lib/files/kinds';
+import { decodeTextFile, decodeTextFor, encodeTextFor, fileType, isValidPythonName, languageFor, parseNewName, programNameFromFile } from '../src/lib/files/kinds';
 
 describe('workspace file kinds', () => {
   it('classifies top-level and app files', () => {
@@ -28,6 +28,7 @@ describe('workspace file kinds', () => {
 describe('parseNewName', () => {
   it('infers the kind from a known extension', () => {
     expect(parseNewName('GAME.hpppl')).toEqual({ name: 'GAME', kind: 'program' });
+    expect(parseNewName('game.py')).toEqual({ name: 'game', kind: 'python' });
     expect(parseNewName(' Foo.HPPRGM ')).toEqual({ name: 'Foo', kind: 'program' });
     expect(parseNewName('My list.note')).toEqual({ name: 'My list', kind: 'note' });
     expect(parseNewName('Quiz.hpappdir')).toEqual({ name: 'Quiz', kind: 'app' });
@@ -45,5 +46,15 @@ describe('decodeTextFile', () => {
     expect(decodeTextFile(new TextEncoder().encode('A:=1;\r\nB▶x;'))).toBe('A:=1;\nB▶x;');
     expect(decodeTextFile(utf16('﻿EXPORT X()\r\nBEGIN\0'))).toBe('EXPORT X()\nBEGIN');
     expect(decodeTextFile(utf16('EXPORT X()\n'))).toBe('EXPORT X()\n');
+  });
+});
+
+describe('isValidPythonName', () => {
+  it('accepts module-style names only', () => {
+    expect(isValidPythonName('main')).toBe(true);
+    expect(isValidPythonName('_util2')).toBe(true);
+    expect(isValidPythonName('2fast')).toBe(false);
+    expect(isValidPythonName('my script')).toBe(false);
+    expect(isValidPythonName('x'.repeat(32))).toBe(false);
   });
 });

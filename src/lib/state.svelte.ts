@@ -1257,6 +1257,24 @@ export async function sendAppScript(file: string): Promise<boolean> {
   return ok;
 }
 
+/**
+ * Create a script for the calculator's Python app: `&Python.hpappdir/<name>.py` (the folder is
+ * made if it isn't there). Send puts just that file into the app on the calculator.
+ */
+export async function newPythonScript(name: string): Promise<boolean> {
+  const ws = await ensureWorkspace();
+  const file = `${appDirName(PYTHON_APP)}/${name}.py`;
+  if (await ws.exists(file)) {
+    setStatus(`${file} already exists`, 'error');
+    return false;
+  }
+  await writeTracked(file, `# ${name}.py: a script for the calculator's Python app.\n\nprint("Hello from ${name}")\n`);
+  await refreshFiles();
+  openFile(file);
+  setStatus(`Created ${name}.py. Send puts it into the calculator's Python app`, 'ok');
+  return true;
+}
+
 /** Delete one script from a built-in app on the calculator (after confirmation). */
 export async function deleteCalcAppScript(name: string, appName = PYTHON_APP): Promise<void> {
   const ok = await askConfirm(

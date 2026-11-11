@@ -150,20 +150,23 @@
             />{:else}<span class="app-icon"><Icon name="widgets" size={16} /></span>{/if}{appDisplayName(name)}
           {#if isSystemApp(name)}<span class="tag">built-in</span>{/if}
         </button>
-        <button
-          class="act"
-          title="Send app to the calculator"
-          aria-label="Send app {appDisplayName(name)}"
-          disabled={!app.connected || !!app.busy}
-          onclick={() => sendAppFolder(name)}><Icon name="upload" /></button
-        >
-        <button
-          class="act"
-          title="Set icon (any image; cropped to a square and scaled to 38×38)"
-          aria-label="Set icon of {appDisplayName(name)}"
-          onclick={() => setAppIcon(name)}
-          ><Icon name="image" /></button
-        >
+        <!-- A folder with only scripts (e.g. new Python scripts) has no app data: send its files one by one. -->
+        {#if app.files.includes(`${appDirName(name)}/${name}.hpapp`)}
+          <button
+            class="act"
+            title="Send app to the calculator"
+            aria-label="Send app {appDisplayName(name)}"
+            disabled={!app.connected || !!app.busy}
+            onclick={() => sendAppFolder(name)}><Icon name="upload" /></button
+          >
+          <button
+            class="act"
+            title="Set icon (any image; cropped to a square and scaled to 38×38)"
+            aria-label="Set icon of {appDisplayName(name)}"
+            onclick={() => setAppIcon(name)}
+            ><Icon name="image" /></button
+          >
+        {/if}
         <button class="act" title="Add a file (e.g. a Python module)" aria-label="Add a file to {appDisplayName(name)}" onclick={() => addAppFile(name)}><Icon name="add" /></button>
         {#if !isSystemApp(name)}
           <button class="act" title="Rename app" aria-label="Rename app {appDisplayName(name)}" onclick={() => renameApp(name)}><Icon name="edit" /></button>

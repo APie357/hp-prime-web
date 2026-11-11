@@ -104,13 +104,17 @@ export function decodeTextFile(b: Uint8Array): string {
   return t.replace(/^\uFEFF/, '').replace(/\0+$/, '').replace(/\r\n?/g, '\n');
 }
 
+/** A Python script name that can also be imported as a module: letters, digits, _; no leading digit. */
+export const isValidPythonName = (name: string) => /^[A-Za-z_][A-Za-z0-9_]{0,30}$/.test(name);
+
 /** What the "New…" dialog creates. */
-export type NewKind = FileKind | 'app';
+export type NewKind = FileKind | 'app' | 'python';
 
 const NEW_EXT: [RegExp, NewKind][] = [
   [/\.(hpppl|ppl|hpprgm|prgm|txt)$/i, 'program'],
   [/\.(note|hpnote)$/i, 'note'],
   [/\.(hpappdir|hpapp|app)$/i, 'app'],
+  [/\.py$/i, 'python'],
 ];
 
 /**
