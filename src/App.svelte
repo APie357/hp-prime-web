@@ -14,7 +14,8 @@
   import Icon from './components/Icon.svelte';
   import { appDisplayName, appOfPath } from './lib/files/app';
   import { fileType } from './lib/files/kinds';
-  import { cycleTheme, resetSize, resolvedTheme, saveLayout, setSize, ui, type Layout } from './lib/ui.svelte';
+  import { resetSize, saveLayout, setSize, ui, type Layout } from './lib/ui.svelte';
+  import SettingsDialog from './components/SettingsDialog.svelte';
   import { app, autoConnect, connect, disconnect, initWorkspace, sendAndRun, sendCurrent, toggleConsole } from './lib/state.svelte';
   import { programNameFromFile } from './lib/files/workspace';
 
@@ -30,7 +31,6 @@
     else document.documentElement.dataset.theme = ui.theme;
   });
 
-  const themeIcon = $derived(ui.theme === 'auto' ? 'brightness_auto' : ui.theme === 'light' ? 'light_mode' : 'dark_mode');
 
   // Panel resizing: remember the size when a drag starts and apply the pointer delta.
   let startSize = 0;
@@ -73,11 +73,8 @@
       <span class="dev"><Icon name="usb_off" size={16} /> not connected</span>
     {/if}
     <span class="spacer"></span>
-    <button
-      class="theme"
-      onclick={cycleTheme}
-      title="Theme: {ui.theme === 'auto' ? `Auto (${resolvedTheme()})` : ui.theme} — click to change"
-      aria-label="Theme: {ui.theme}"><Icon name={themeIcon} size={18} /></button
+    <button class="theme" onclick={() => (ui.settingsOpen = true)} title="Settings" aria-label="Settings"
+      ><Icon name="settings" size={18} /></button
     >
     <button
       class="primary"
@@ -118,6 +115,7 @@
     </div>
   {/if}
 
+  {#if ui.settingsOpen}<SettingsDialog />{/if}
   {#if app.newFileOpen}<NewFileDialog />{/if}
   {#if app.newAppOpen}<NewAppDialog />{/if}
   {#if dialogs.current}{#key dialogs.current}<Dialogs req={dialogs.current} />{/key}{/if}

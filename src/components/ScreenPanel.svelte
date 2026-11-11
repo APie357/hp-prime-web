@@ -1,7 +1,6 @@
 <script lang="ts">
   import Keypad from './Keypad.svelte';
   import { keysForKeyboardEvent } from '../lib/hid/keys';
-  import type { PixelMode } from '../lib/screen';
   import type { KeyMode } from '../lib/hid/session';
   import {
     app,
@@ -11,9 +10,9 @@
     screen,
     setLive,
     setKeyMode,
-    setPixelMode,
     toggleKeypad,
   } from '../lib/state.svelte';
+  import { ui } from '../lib/ui.svelte';
 
   let canvas: HTMLCanvasElement | undefined = $state();
 
@@ -27,6 +26,7 @@
 
   // Typing on the focused screen sends keys to the calculator.
   function onKey(e: KeyboardEvent) {
+    if (!ui.remoteKeys) return;
     const codes = keysForKeyboardEvent(e);
     if (!codes) return;
     e.preventDefault();
@@ -64,10 +64,10 @@
   <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
   <div
     class="screen"
-    tabindex={app.connected ? 0 : -1}
+    tabindex={app.connected && ui.remoteKeys ? 0 : -1}
     role="application"
-    aria-label="Calculator screen. While focused, typing sends keys to the calculator."
-    title={app.connected ? 'Click here, then type to send keys (arrows, Enter, Esc, Backspace, letters, digits)' : ''}
+    aria-label={ui.remoteKeys ? 'Calculator screen. While focused, typing sends keys to the calculator.' : 'Calculator screen'}
+    title={app.connected && ui.remoteKeys ? 'Click here, then type to send keys (arrows, Enter, Esc, Backspace, letters, digits)' : ''}
     onkeydown={onKey}
   >
     {#if screen.image}
@@ -83,41 +83,35 @@
   <div class="row">
     <button onclick={() => captureScreen()} disabled={!app.connected}>Screenshot</button>
     <button onclick={savePng} disabled={!screen.image} title="Save the current screenshot as PNG">Save</button>
-    <button onclick={toggleKeypad} aria-pressed={screen.showKeypad} class:on={screen.showKeypad}>Keypad</button>
-    <select
-      value={screen.mode}
-      onchange={(e) => setPixelMode(e.currentTarget.value as PixelMode)}
-      title="How to read the calculator's 16-bit pixels; change this if colors look wrong"
-      aria-label="Pixel format"
-    >
-      <option value="rgb555le">RGB555</option>
-      <option value="rgb565be">RGB565</option>
-      <option value="gray">Gray</option>
-    </select>
+    {#if ui.remoteKeys}
+      <button onclick={toggleKeypad} aria-pressed={screen.showKeypad} class:on={screen.showKeypad}>Keypad</button>
+    {/if}
   </div>
-  <div class="row probe">
-    <button
-      onclick={probeKeys}
-      disabled={!app.connected || !!app.busy}
-      title="Goes to Home, types 1, compares screenshots, then deletes it"
-    >
-      Test keys
-    </button>
-    <span class="muted">Keys: <span class:ok={screen.keysWork} class:bad={screen.keysWork === false}>{keysNote}</span></span>
-    <select
-      value={screen.keyMode}
-      onchange={(e) => setKeyMode(e.currentTarget.value as KeyMode)}
-      title="How key presses are sent (experimental). If keys only appear after you press a real key, try another mode."
-      aria-label="Key mode"
-    >
-      <option value="single">One per message</option>
-      <option value="batch">All in one message</option>
-      <option value="release">Press + release</option>
-      <option value="ready">Then ready check</option>
-    </select>
-  </div>
+  {#if ui.remoteKeys}
+    <div class="row probe">
+      <button
+        onclick={probeKeys}
+        disabled={!app.connected || !!app.busy}
+        title="Goes to Home, types 1, compares screenshots, then deletes it"
+      >
+        Test keys
+      </button>
+      <span class="muted">Keys: <span class:ok={screen.keysWork} class:bad={screen.keysWork === false}>{keysNote}</span></span>
+      <select
+        value={screen.keyMode}
+        onchange={(e) => setKeyMode(e.currentTarget.value as KeyMode)}
+        title="How key presses are sent (experimental). If keys only appear after you press a real key, try another mode."
+        aria-label="Key mode"
+      >
+        <option value="single">One per message</option>
+        <option value="batch">All in one message</option>
+        <option value="release">Press + release</option>
+        <option value="ready">Then ready check</option>
+      </select>
+    </div>
+  {/if}
 
-  {#if screen.showKeypad && app.connected}
+  {#if ui.remoteKeys && screen.showKeypad && app.connected}
     <Keypad />
   {/if}
 </section>
@@ -126,6 +120,7 @@
   .screen-panel {
     display: flex;
     flex-direction: column;
+    padding-bottom: 6px;
     border-bottom: 1px solid var(--border);
   }
   header {
@@ -185,7 +180,6 @@
     margin-left: auto;
   }
   .probe {
-    padding-bottom: 6px;
     font-size: 12px;
   }
   button.on {

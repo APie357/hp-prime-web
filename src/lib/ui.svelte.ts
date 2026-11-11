@@ -1,4 +1,4 @@
-/** UI preferences kept in localStorage: color theme and panel sizes. */
+/** UI preferences kept in localStorage: color theme, experimental features and panel sizes. */
 
 export type ThemePref = 'auto' | 'light' | 'dark';
 
@@ -40,6 +40,10 @@ export const ui = $state({
   theme: load<ThemePref>('theme', 'auto'),
   systemLight: media?.matches ?? false,
   layout: { ...LAYOUT_DEFAULTS, ...load<Partial<Layout>>('layout', {}) } as Layout,
+  /** Experimental: remote keypad, key test and typing on the screen (key injection is unreliable on the G2). */
+  remoteKeys: load<boolean>('remoteKeys', false),
+  /** Settings dialog is open (not saved). */
+  settingsOpen: false,
 });
 
 media?.addEventListener('change', (e) => {
@@ -56,9 +60,9 @@ export function setTheme(t: ThemePref): void {
   save('theme', t);
 }
 
-/** Cycle Auto → Light → Dark. */
-export function cycleTheme(): void {
-  setTheme(ui.theme === 'auto' ? 'light' : ui.theme === 'light' ? 'dark' : 'auto');
+export function setRemoteKeys(on: boolean): void {
+  ui.remoteKeys = on;
+  save('remoteKeys', on);
 }
 
 export function clampSize(k: keyof Layout, v: number): number {
