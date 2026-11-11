@@ -359,6 +359,8 @@ export async function sendCurrent(): Promise<boolean> {
     return false;
   }
   const appName = appOfPath(file);
+  // A script in a built-in app (e.g. the Python app): send just that file, keeping the rest.
+  if (appName && isSystemApp(appName) && !isAppOwnFile(appName, file)) return sendAppScript(file);
   if (appName) return sendAppFolder(appName);
   if (fileType(file) === 'exam') return sendExamFile(file);
   const text = editorBridge.getText(file);
@@ -659,7 +661,8 @@ const NEW_PY_APP = '\u0000new';
 async function importPython(fileName: string, bytes: Uint8Array): Promise<boolean> {
   const apps = workspaceApps(app.files);
   const choices = [
-    ...apps.map((a) => ({ value: a, label: appDisplayName(a) })),
+    ...(apps.includes(PYTHON_APP) ? [] : [{ value: PYTHON_APP, label: 'Python (the calculator’s Python app)' }]),
+    ...apps.map((a) => ({ value: a, label: a === PYTHON_APP ? 'Python (the calculator’s Python app)' : appDisplayName(a) })),
     { value: NEW_PY_APP, label: 'New Python app…' },
   ];
   const pick = await askChoice(`Python runs inside an app on the calculator. Which app should ${fileName} go into?`, choices, choices[0].value, {
@@ -682,7 +685,9 @@ async function importPython(fileName: string, bytes: Uint8Array): Promise<boolea
   if (!(await importBytes(path, bytes, fileName))) return false;
   await refreshFiles();
   openFile(path);
-  if (pick === NEW_PY_APP) {
+  if (isSystemApp(appName)) {
+    setStatus(`Copied ${fileName} into ${appDirName(appName)}; Send puts just this file into the calculator's ${appDisplayName(appName)} app`, 'ok');
+  } else if (pick === NEW_PY_APP) {
     setStatus(`Created Python app ${appName} with ${fileName}; edit its START() to import it`, 'ok');
   }
   return true;
@@ -1129,6 +1134,139 @@ export async function sendAppFolder(name: string): Promise<boolean> {
     }
   });
   return ok ?? false;
+}
+
+// ----------------------------------------------- scripts in built-in apps
+
+/** The calculator's built-in Python app; its scripts are the app's extra files. */
+export const PYTHON_APP = '&Python';
+
+/** Scripts (extra files) in an app from the last listing. */
+export function calcAppScripts(name = PYTHON_APP): { name: string; size: number }[] {
+  const a = app.calcApps.find((x) => x.name === name);
+  if (!a) return [];
+  try {
+    return parseAppPayload(a.payload)
+      .files.map((f) => ({ name: f.name, size: f.data.length }))
+      .sort((x, y) => x.name.localeCompare(y.name));
+  } catch {
+    return [];
+  }
+}
+
+/** Copy one script from an app in the last listing into `<app>.hpappdir/<file>` and open it. */
+export async function openCalcAppScript(file: string, appName = PYTHON_APP): Promise<void> {
+  const a = app.calcApps.find((x) => x.name === appName);
+  const f = a && parseAppPayload(a.payload).files.find((x) => x.name === file);
+  if (!f) return setStatus(`${file} isn't in the ${appDisplayName(appName)} app's last listing`, 'error');
+  const path = `${appDirName(appName)}/${file}`;
+  try {
+    if (!(await importBytes(path, f.data, `the calculator's copy`))) return;
+  } catch (e) {
+    return setStatus(`Couldn't save ${file}: ${(e as Error).message}`, 'error');
+  }
+  await refreshFiles();
+  openFile(path);
+  setStatus(`Copied ${file} from the ${appDisplayName(appName)} app`, 'ok');
+}
+
+/**
+ * Change an app's extra files on the calculator: fetch the live app, apply `change` to its file
+ * list, send it back and read it back. Everything else in the app is sent back as it was.
+ */
+async function changeCalcAppFiles(
+  appName: string,
+  what: string,
+  change: (
+    files: { name: string; data: Uint8Array }[],
+  ) => { name: string; data: Uint8Array }[] | null | Promise<{ name: string; data: Uint8Array }[] | null>,
+): Promise<boolean> {
+  const ok = await busy(what, async (): Promise<boolean> => {
+    const s = needSession();
+    setStatus(`Reading the ${appDisplayName(appName)} app from the calculator…`);
+    let payloadNow = (await s.readApp(appName, 5000))?.data;
+    if (!payloadNow) {
+      // Fetching one app by name (F8) is unconfirmed on hardware; the last listing may do.
+      const listed = app.calcApps.find((a) => a.name === appName);
+      const when = app.calcListedAt ? new Date(app.calcListedAt).toLocaleTimeString() : '';
+      if (
+        !listed ||
+        !(await askConfirm(
+          `The calculator didn't answer a request for its ${appDisplayName(appName)} app. Use the copy from the last listing (${when})? Changes made on the calculator since then would be lost.`,
+          { title: 'Use the listed copy?', okLabel: 'Use it' },
+        ))
+      ) {
+        setStatus(`The calculator didn't send its ${appDisplayName(appName)} app`, 'error');
+        return false;
+      }
+      payloadNow = listed.payload;
+    }
+    const parts = parseAppPayload(payloadNow);
+    const files = await change(parts.files);
+    if (!files) {
+      setStatus('Canceled');
+      return false;
+    }
+    const payload = buildAppPayload({ ...parts, files });
+    setStatus(`${what} (${payload.length} B)…`);
+    const r = await s.sendApp(appName, payload, app.verifyAfterSend);
+    if (r.refused) {
+      setStatus(`The calculator refused the ${appDisplayName(appName)} app`, 'error');
+      return false;
+    }
+    const sent = calcAppFrom({ type: ObjType.APP, name: appName, data: r.readback ?? payload, crcOk: true, compressed: false });
+    if (sent) app.calcApps = app.calcApps.map((a) => (a.name === appName ? sent : a));
+    const same = r.verified === 'match' || (r.verified === 'mismatch' && r.readback && !compareApps(payload, r.readback).length);
+    if (same) setStatus(`${what}: done, read-back verified ✓`, 'ok');
+    else if (r.verified === 'skipped') setStatus(`${what}: sent`, 'ok');
+    else if (r.verified === 'no-reply') setStatus(`${what}: sent, but the read-back got no reply`, 'error');
+    else setStatus(`${what}: sent, but the read-back differs: ${compareApps(payload, r.readback!).join('; ')}`, 'error');
+    return !!same || r.verified !== 'mismatch';
+  });
+  return ok ?? false;
+}
+
+/** Send one script of a built-in app's folder (e.g. `&Python.hpappdir/main.py`) into that app. */
+export async function sendAppScript(file: string): Promise<boolean> {
+  const appName = appOfPath(file)!;
+  const name = file.slice(appDirName(appName).length + 1);
+  if (app.dirty.includes(file)) await saveFile(file);
+  const text = editorBridge.getText(file);
+  const data = text !== null ? encodeTextForApp(file, text) : await (await ensureWorkspace()).readBytes(file);
+  let replacing = false;
+  const ok = await changeCalcAppFiles(appName, `Sending ${name} to the ${appDisplayName(appName)} app`, async (files) => {
+    const i = files.findIndex((f) => f.name === name);
+    replacing = i >= 0;
+    if (i < 0) return [...files, { name, data }];
+    const old = files[i].data;
+    const same = old.length === data.length && old.every((b, k) => b === data[k]);
+    if (
+      !same &&
+      !(await askConfirm(`${name} already exists in the calculator's ${appDisplayName(appName)} app. Overwrite it?`, {
+        title: 'Overwrite on the calculator?',
+        okLabel: 'Overwrite',
+        danger: true,
+      }))
+    )
+      return null;
+    const out = files.slice();
+    out[i] = { name, data };
+    return out;
+  });
+  if (ok) log('info', `${replacing ? 'replaced' : 'added'} ${name} in ${appName}`);
+  return ok;
+}
+
+/** Delete one script from a built-in app on the calculator (after confirmation). */
+export async function deleteCalcAppScript(name: string, appName = PYTHON_APP): Promise<void> {
+  const ok = await askConfirm(
+    `Delete ${name} from the calculator's ${appDisplayName(appName)} app? This can't be undone (your workspace copy, if any, is kept).`,
+    { title: 'Delete from the calculator?', okLabel: 'Delete', danger: true },
+  );
+  if (!ok) return;
+  await changeCalcAppFiles(appName, `Deleting ${name} from the ${appDisplayName(appName)} app`, (files) =>
+    files.some((f) => f.name === name) ? files.filter((f) => f.name !== name) : null,
+  );
 }
 
 /** Fetch one app from the calculator by name and save it into the workspace. */

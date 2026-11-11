@@ -22,6 +22,8 @@ HP Prime calculator over USB, using WebHID.
 - Send the open program, note or app to the calculator, with an overwrite check and read-back verification.
 - List the apps, programs and notes on the calculator, open them in the editor, or delete them.
 - Apps: edit an app's program, Info note and files (e.g. Python modules), set its icon, create new apps.
+- Python app scripts: open the scripts in the calculator's Python app, edit them, and send one back
+  without touching the others.
 - Exam-mode configurations (optional): edit the timeout, angle, memory and LED options, CAS, and
   copy a password from another configuration.
 - Screen view with live mirroring, chat with the calculator, clock sync, and backup to a .zip.

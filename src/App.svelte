@@ -12,7 +12,7 @@
   import Dialogs from './components/Dialogs.svelte';
   import { dialogs } from './lib/dialogs.svelte';
   import Icon from './components/Icon.svelte';
-  import { appDisplayName, appOfPath } from './lib/files/app';
+  import { appDisplayName, appOfPath, isSystemApp } from './lib/files/app';
   import { fileType } from './lib/files/kinds';
   import { resetSize, saveLayout, setSize, ui, type Layout } from './lib/ui.svelte';
   import SettingsDialog from './components/SettingsDialog.svelte';
@@ -21,8 +21,15 @@
 
   const isProgram = $derived(!!app.current && fileType(app.current) === 'program');
   const currentApp = $derived(app.current ? appOfPath(app.current) : null);
+  // A script in a built-in app (e.g. the Python app) is sent on its own; other app files send the whole app.
   const sendLabel = $derived(
-    !app.current ? '' : currentApp ? `app ${appDisplayName(currentApp)}` : programNameFromFile(app.current),
+    !app.current
+      ? ''
+      : currentApp && isSystemApp(currentApp) && !/\.(hpapp|hpappprgm|hpappnote)$/i.test(app.current)
+        ? `${app.current.replace(/^.*\//, '')} to the ${appDisplayName(currentApp)} app on the`
+        : currentApp
+          ? `app ${appDisplayName(currentApp)} to`
+          : `${programNameFromFile(app.current)} to`,
   );
 
   // Theme: data-theme on <html> only when chosen explicitly; Auto follows the system via CSS.
@@ -82,7 +89,7 @@
       disabled={!app.connected || !app.current || !!app.busy}
       title="Send the open program to the calculator (Ctrl+Enter)"
     >
-      <Icon name="upload" size={16} /> Send {sendLabel} to calculator
+      <Icon name="upload" size={16} /> Send {sendLabel} calculator
     </button>
     <button
       class="run"

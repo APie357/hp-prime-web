@@ -7,12 +7,16 @@
     backupToZip,
     clearChat,
     clearHelp,
+    calcAppScripts,
     deleteCalcApp,
+    deleteCalcAppScript,
     deleteCalcExam,
     deleteCalcObject,
     fetchApp,
     fetchObject,
     openCalcApp,
+    openCalcAppScript,
+    PYTHON_APP,
     openCalcExam,
     importObject,
     refreshCalcContents,
@@ -207,6 +211,33 @@
           {/if}
         {/if}
       </ul>
+      {#if app.calcApps.some((a) => a.name === PYTHON_APP)}
+        {@const scripts = calcAppScripts()}
+        <h3 class="pad">Python scripts <span class="muted">({scripts.length})</span></h3>
+        <ul>
+          {#each scripts as sc (sc.name)}
+            <li>
+              <span class="name" title="{sc.name} in the Python app">{sc.name}</span>
+              <span class="muted size">{sc.size} B</span>
+              <button
+                class="icon-btn"
+                onclick={() => openCalcAppScript(sc.name)}
+                title="Copy into the workspace (&Python.hpappdir) and open; Send puts it back"
+                aria-label="Open Python script {sc.name}"><Icon name="file_open" /></button
+              >
+              <button
+                class="danger"
+                onclick={() => deleteCalcAppScript(sc.name)}
+                disabled={!!app.busy || !app.connected}
+                title="Delete from the calculator's Python app"
+                aria-label="Delete Python script {sc.name} from the calculator"><Icon name="delete" /></button
+              >
+            </li>
+          {:else}
+            <li class="muted">No scripts in the Python app</li>
+          {/each}
+        </ul>
+      {/if}
       {#each [{ title: 'Programs', items: programs, kind: 'program' }, { title: 'Notes', items: notes, kind: 'note' }] as group (group.kind)}
         <h3 class="pad">{group.title} {#if app.calcListedAt}<span class="muted">({group.items.length})</span>{/if}</h3>
         <ul>
