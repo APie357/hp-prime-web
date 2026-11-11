@@ -97,7 +97,11 @@
           {#each app.chat as line, i (i)}
             <li class={line.dir} title={new Date(line.at).toLocaleTimeString()}>
               <span class="who">{line.dir === 'in' ? 'Calc' : 'You'}</span>
-              <span class="text">{line.text}</span>
+              {#if line.help}
+                <span class="text help">✋ asked for help</span>
+              {:else}
+                <span class="text">{line.text}</span>
+              {/if}
             </li>
           {/each}
         </ol>
@@ -237,6 +241,11 @@
     overflow-wrap: anywhere;
     white-space: pre-wrap;
     font-family: var(--mono);
+  }
+  .chat-log .help {
+    font-family: inherit;
+    font-style: italic;
+    color: #dcdcaa;
   }
   h3 .link {
     float: right;

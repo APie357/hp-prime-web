@@ -54,11 +54,13 @@ export const app = $state({
 export interface ChatLine {
   dir: 'in' | 'out';
   text: string;
+  /** The calculator's Help softkey in Messages (sent as an empty message). */
+  help?: boolean;
   at: number;
 }
 
-function addChat(dir: ChatLine['dir'], text: string): void {
-  app.chat = [...app.chat.slice(-199), { dir, text, at: Date.now() }];
+function addChat(dir: ChatLine['dir'], text: string, help = false): void {
+  app.chat = [...app.chat.slice(-199), { dir, text, at: Date.now(), help }];
 }
 
 /** Screen mirror. `image` is replaced wholesale, never mutated. */
@@ -173,6 +175,10 @@ async function openDevice(device: HIDDevice): Promise<void> {
   port.pad = app.padReports;
   session = new PrimeSession(port);
   session.onChat = (text) => {
+    if (!text) {
+      addChat('in', '', true);
+      return setStatus('The calculator asked for help (Help key in Messages)', 'ok');
+    }
     addChat('in', text);
     setStatus(`Message from calculator: ${text}`, 'ok');
   };

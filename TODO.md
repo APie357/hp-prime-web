@@ -38,7 +38,8 @@ The user confirmed on 2026-11-09 that connect, send, receive, list, and fetch wo
 - [x] Verify clock sync on the G2 (correct date and time, timezone)
 - [x] Chat (`F2`): send and receive, with a chat log in the Calculator panel
   - [x] On the G2: sent messages appear on the calculator, and its replies arrive as `F2 01 len(u32BE) UTF-16LE text 00 00`
-  - [ ] Check that receiving works in the web UI (idle listener), including while the live screen is on
+  - [x] Receiving works in the web UI (idle listener); the Help softkey shows as a help request
+  - [ ] Check receiving while the live screen is on
 - [x] Full backup to a `.zip` (`src/lib/files/backup.ts`: `manifest.json`, `raw/<type>/<name>.bin` for every object, readable `programs/` and `notes/`)
 - [x] Restore programs and notes from a backup `.zip` (through the verified send path; other object types are skipped)
   - [ ] On the G2: back up, restore, and compare

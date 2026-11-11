@@ -86,7 +86,7 @@ export class PrimeSession {
   readonly framing: LinkFraming;
   private chain: Promise<unknown> = Promise.resolve();
   timeouts: Timeouts = { ...DEFAULT_TIMEOUTS };
-  /** Called for chat (F2) messages the calculator sends on its own. */
+  /** Called for chat (F2) messages the calculator sends on its own. "" = the Messages app's Help key. */
   onChat?: (text: string) => void;
   /** Operations queued or running (excluding the idle listener). */
   private waiting = 0;
@@ -166,7 +166,7 @@ export class PrimeSession {
     if (msg[0] === C.CMD.CHAT) {
       try {
         const text = parseChat(msg);
-        log('info', `chat from calculator: ${text}`);
+        log('info', text ? `chat from calculator: ${text}` : 'calculator pressed Help in Messages (empty chat message)');
         this.onChat?.(text);
       } catch (e) {
         log('warn', `bad chat message: ${(e as Error).message}`);
