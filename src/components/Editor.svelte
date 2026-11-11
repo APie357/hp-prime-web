@@ -3,6 +3,7 @@
   import type * as Monaco from 'monaco-editor/editor';
   import { resolvedTheme } from '../lib/ui.svelte';
   import PythonLogo from './PythonLogo.svelte';
+  import ExamEditor from './ExamEditor.svelte';
   import Icon from './Icon.svelte';
   import { fileIcon } from '../lib/icons';
   import { fileType, isProse, languageFor } from '../lib/files/kinds';
@@ -149,7 +150,8 @@
   $effect(() => {
     const file = app.current;
     if (!editor) return;
-    if (!file) {
+    // Exam configurations have their own form (ExamEditor) instead of a text model.
+    if (!file || fileType(file) === 'exam') {
       if (shown && models.has(shown)) viewStates.set(shown, editor.saveViewState());
       shown = null;
       editor.setModel(null);
@@ -234,6 +236,8 @@
       <p class="hint"><kbd>Ctrl</kbd>+<kbd>S</kbd> save · <kbd>Ctrl</kbd>+<kbd>Enter</kbd> send to calculator · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Enter</kbd> send &amp; run</p>
       <p class="hint"><kbd>Alt</kbd>+<kbd>=</kbd> types <code>:=</code> · <kbd>Alt</kbd>+<kbd>.</kbd> types <code>▶</code> · <kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>F</kbd> format</p>
     </div>
+  {:else if fileType(app.current) === 'exam'}
+    {#key app.current}<ExamEditor file={app.current} />{/key}
   {:else if !editor}
     <div class="empty">
       <p class="hint">{loadError ? `Editor failed to load: ${loadError}` : 'Loading editor…'}</p>

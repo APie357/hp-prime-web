@@ -24,6 +24,7 @@
   import PythonLogo from './PythonLogo.svelte';
   import Icon from './Icon.svelte';
   import { fileIcon } from '../lib/icons';
+  import { ui } from '../lib/ui.svelte';
 
   /** Object URLs for app icons shown in the list, by app name. */
   let iconUrls = $state<Record<string, string>>({});
@@ -51,7 +52,8 @@
     };
   });
 
-  const rootFiles = $derived(app.files.filter((f) => !f.includes('/')));
+  // Exam configurations show only with the Exam mode setting on.
+  const rootFiles = $derived(app.files.filter((f) => !f.includes('/') && (ui.examMode || fileType(f) !== 'exam')));
   const apps = $derived(workspaceApps(app.files));
   /** Expanded app folders (the one holding the current file is always open). */
   let expanded = $state<string[]>([]);

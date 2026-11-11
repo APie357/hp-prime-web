@@ -18,6 +18,11 @@
       items: [
         { flag: 'listOnConnect', label: 'List contents on connect', hint: 'Read apps, programs and notes when the calculator connects (~20 s).' },
         { flag: 'chat', label: 'Chat', hint: 'Send messages to the calculator and see its replies and Help requests.' },
+        {
+          flag: 'examMode',
+          label: 'Exam mode configurations',
+          hint: 'List, open, edit and send exam-mode configurations (.hpexammode). Their format is only partly known, and sending them is untested on hardware.',
+        },
       ],
     },
     {

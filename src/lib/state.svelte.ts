@@ -31,6 +31,7 @@ import {
   parseAppPayload,
 } from './files/app';
 import { BinaryFileError, fileType, languageFor } from './files/kinds';
+import { EXAM_SAMPLE_SIZE, examFileFor, examName, isValidExamName, withExamName } from './files/exam';
 import { ICON_FILE, ICON_SIZE, makeAppIcon, pickImage, type IconResult } from './files/icon';
 import { setLocalModuleSource } from './lang/pythonProviders';
 import {
@@ -57,6 +58,12 @@ export interface AppBase {
   label: string;
   bag: Uint8Array;
   base: string;
+}
+
+/** An exam-mode configuration seen on the calculator (type 0B, kept as raw bytes). */
+export interface CalcExam {
+  name: string;
+  data: Uint8Array;
 }
 
 /** A program or note seen on the calculator. */
@@ -92,6 +99,8 @@ export const app = $state({
   helpPending: false,
   /** Apps on the calculator, from the last listing. */
   calcApps: [] as CalcApp[],
+  /** Exam-mode configurations on the calculator, from the last listing. */
+  calcExams: [] as CalcExam[],
   /** "New…" dialog (program, note or app) is open. */
   newFileOpen: false,
   /** "New app" dialog is open. */
@@ -350,6 +359,7 @@ export async function sendCurrent(): Promise<boolean> {
   }
   const appName = appOfPath(file);
   if (appName) return sendAppFolder(appName);
+  if (fileType(file) === 'exam') return sendExamFile(file);
   const text = editorBridge.getText(file);
   if (text === null) return false;
   await saveCurrent();
@@ -441,10 +451,18 @@ export async function refreshCalcContents(): Promise<void> {
       .map((f) => calcAppFrom(f))
       .filter((a): a is CalcApp => !!a)
       .sort((a, b) => Number(isSystemApp(a.name)) - Number(isSystemApp(b.name)) || a.name.localeCompare(b.name));
+    app.calcExams = files
+      .filter((f) => f.type === ObjType.TESTMODE)
+      .map((f) => ({ name: f.name, data: f.data }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    for (const e of app.calcExams) {
+      if (e.data.length !== EXAM_SAMPLE_SIZE) log('info', `exam configuration ${e.name} is ${e.data.length} B (the known sample is ${EXAM_SAMPLE_SIZE} B)`);
+    }
     app.calcListedAt = Date.now();
     const n = (k: TextKind) => app.calcObjects.filter((o) => o.kind === k).length;
+    const exams = ui.examMode ? `, ${app.calcExams.length} exam configuration(s)` : '';
     setStatus(
-      `Found ${app.calcApps.length} app(s), ${n('program')} program(s) and ${n('note')} note(s) in ${files.length} objects`,
+      `Found ${app.calcApps.length} app(s), ${n('program')} program(s), ${n('note')} note(s)${exams} in ${files.length} objects`,
       'ok',
     );
   });
@@ -1202,9 +1220,17 @@ function queueIncoming(f: PrimeFile): void {
 async function promptIncoming(): Promise<void> {
   const batch = incoming;
   incoming = [];
-  const useful = batch.filter((f) => [ObjType.APP, ObjType.PROGRAM, ObjType.NOTE].includes(f.type as 2 | 5 | 6));
+  const kept: number[] = [ObjType.APP, ObjType.PROGRAM, ObjType.NOTE];
+  if (ui.examMode) kept.push(ObjType.TESTMODE);
+  const useful = batch.filter((f) => kept.includes(f.type));
   const describe = (f: PrimeFile) =>
-    f.type === ObjType.APP ? `app ${appDisplayName(f.name)}` : f.type === ObjType.PROGRAM ? `program ${f.name}` : `note ${f.name}`;
+    f.type === ObjType.APP
+      ? `app ${appDisplayName(f.name)}`
+      : f.type === ObjType.PROGRAM
+        ? `program ${f.name}`
+        : f.type === ObjType.TESTMODE
+          ? `exam configuration ${f.name}`
+          : `note ${f.name}`;
   const skipped = batch.length - useful.length;
   if (!useful.length) {
     setStatus(`The calculator sent ${batch.length} object(s) this app can't store (lists, variables, …)`, 'error');
@@ -1228,6 +1254,11 @@ async function promptIncoming(): Promise<void> {
         if (!a) continue;
         app.calcApps = [...app.calcApps.filter((x) => x.name !== a.name), a];
         if (await saveAppToWorkspace(a.name, a.payload)) saved++;
+      } else if (f.type === ObjType.TESTMODE) {
+        app.calcExams = [...app.calcExams.filter((x) => x.name !== f.name), { name: f.name, data: f.data }].sort((a, b) =>
+          a.name.localeCompare(b.name),
+        );
+        if (await saveExamToWorkspace(f.name, f.data)) saved++;
       } else {
         const kind: TextKind = f.type === ObjType.PROGRAM ? 'program' : 'note';
         const { text, formatted } = decodeText(kind, f.data);
@@ -1241,6 +1272,170 @@ async function promptIncoming(): Promise<void> {
     }
   }
   setStatus(`Saved ${saved} of ${useful.length} object(s) from the calculator`, saved ? 'ok' : 'error');
+}
+
+// ------------------------------------------------ exam configurations
+
+/** Bumped when an exam configuration file is replaced from outside its form (the form reloads). */
+export const examVersion = $state({ n: 0 });
+
+/** Raw bytes of an exam configuration file in the workspace. */
+export async function readExamFile(file: string): Promise<Uint8Array> {
+  const ws = await ensureWorkspace();
+  const [data, t] = await Promise.all([ws.readBytes(file), ws.stat(file)]);
+  if (t !== null) known.set(file, t);
+  return data;
+}
+
+/** Save an exam configuration's bytes (from its form). */
+export async function writeExamFile(file: string, data: Uint8Array): Promise<void> {
+  const ws = await ensureWorkspace();
+  writing.add(file);
+  try {
+    await ws.writeBytes(file, data);
+    const t = await ws.stat(file);
+    if (t !== null) known.set(file, t);
+  } finally {
+    writing.delete(file);
+  }
+}
+
+const sameBytes = (a: Uint8Array, b: Uint8Array) => a.length === b.length && a.every((x, i) => x === b[i]);
+
+/** Put a calculator exam configuration into the workspace and open it. Resolves false if not saved. */
+export async function saveExamToWorkspace(name: string, data: Uint8Array): Promise<boolean> {
+  const ws = await ensureWorkspace();
+  const file = examFileFor(name);
+  if (await ws.exists(file)) {
+    const local = await ws.readBytes(file);
+    if (!sameBytes(local, data)) {
+      const ok = await askConfirm(`${file} in the workspace differs from the calculator's copy. Replace it with the calculator's?`, {
+        title: 'Replace local exam configuration?',
+        okLabel: 'Replace',
+        danger: true,
+      });
+      if (!ok) {
+        openFile(file);
+        return false;
+      }
+    }
+  }
+  await writeExamFile(file, data);
+  examVersion.n++;
+  await refreshFiles();
+  openFile(file);
+  return true;
+}
+
+/** Open an exam configuration from the last calculator listing. */
+export async function openCalcExam(name: string): Promise<void> {
+  const e = app.calcExams.find((x) => x.name === name);
+  if (!e) return;
+  try {
+    if (await saveExamToWorkspace(e.name, e.data)) setStatus(`Saved exam configuration ${name} to the workspace`, 'ok');
+  } catch (err) {
+    setStatus(`Couldn't save exam configuration ${name}: ${(err as Error).message}`, 'error');
+  }
+}
+
+/** Send an exam configuration file (its name field is set to the file name first), then verify. */
+export async function sendExamFile(file: string): Promise<boolean> {
+  const name = programNameFromFile(file);
+  if (!isValidExamName(name)) {
+    setStatus(`"${name}" is not a valid exam configuration name (1–31 characters, no / \\ : * ? " < > |)`, 'error');
+    return false;
+  }
+  const ok = await busy(`Sending exam configuration ${name}`, async (): Promise<boolean> => {
+    let data = await readExamFile(file);
+    if (examName(data) !== name) {
+      data = withExamName(data, name);
+      await writeExamFile(file, data);
+      examVersion.n++;
+    }
+    const s = needSession();
+    setStatus(`Checking whether exam configuration ${name} exists on the calculator…`);
+    if (await s.requestFile(ObjType.TESTMODE, name, 1500)) {
+      const overwrite = await askConfirm(`Exam configuration "${name}" already exists on the calculator. Overwrite it?`, {
+        title: 'Overwrite on the calculator?',
+        okLabel: 'Overwrite',
+        danger: true,
+      });
+      if (!overwrite) {
+        setStatus('Send canceled');
+        return false;
+      }
+    }
+    setStatus(`Sending exam configuration ${name} (${data.length} B)…`);
+    const r = await s.sendObject(ObjType.TESTMODE, name, data, app.verifyAfterSend);
+    if (r.refused) {
+      setStatus(`Calculator refused exam configuration ${name}`, 'error');
+      return false;
+    }
+    app.calcExams = [...app.calcExams.filter((x) => x.name !== name), { name, data: r.readback ?? data }].sort((a, b) =>
+      a.name.localeCompare(b.name),
+    );
+    switch (r.verified) {
+      case 'match':
+        setStatus(`Sent exam configuration ${name} (${r.bytes} B) — read-back verified ✓`, 'ok');
+        return true;
+      case 'mismatch':
+        log('warn', `exam configuration ${name}: read-back differs (sent ${data.length} B, got ${r.readback?.length ?? 0} B)`);
+        setStatus(`Sent exam configuration ${name}, but the read-back differs (open it from the Calculator panel to compare)`, 'error');
+        return false;
+      case 'no-reply':
+        setStatus(`Sent exam configuration ${name} (${r.bytes} B); the read-back got no reply`, 'error');
+        return true;
+      default:
+        setStatus(`Sent exam configuration ${name} (${r.bytes} B)`, 'ok');
+        return true;
+    }
+  });
+  return ok ?? false;
+}
+
+/** Delete an exam configuration on the calculator, after confirmation, and check that it's gone. */
+export async function deleteCalcExam(name: string): Promise<void> {
+  const ok = await askConfirm(`Delete exam configuration "${name}" from the calculator? This can't be undone (your workspace copy, if any, is kept).`, {
+    title: 'Delete from the calculator?',
+    okLabel: 'Delete',
+    danger: true,
+  });
+  if (!ok) return;
+  await busy(`Deleting ${name}`, async () => {
+    const r = await needSession().deleteObject(ObjType.TESTMODE, name);
+    if (r.refused) return setStatus(`The calculator refused to delete exam configuration ${name}`, 'error');
+    if (!r.gone) return setStatus(`Sent delete for exam configuration ${name}, but it still answers a fetch (see console)`, 'error');
+    app.calcExams = app.calcExams.filter((x) => x.name !== name);
+    setStatus(`Deleted exam configuration ${name} from the calculator ✓`, 'ok');
+  });
+}
+
+/** Rename an exam configuration file; its stored name follows (and is sent under the new name). */
+async function renameExamFile(file: string): Promise<void> {
+  const oldName = programNameFromFile(file);
+  const name = await askText(`New name for ${file}:`, oldName, {
+    title: 'Rename exam configuration',
+    okLabel: 'Rename',
+    validate: (v) => (isValidExamName(v) ? null : 'Not a valid name (1–31 characters, no / \\ : * ? " < > |)'),
+  });
+  if (!name || name === oldName) return;
+  const to = examFileFor(name);
+  const ws = await ensureWorkspace();
+  if (to.toLowerCase() !== file.toLowerCase() && (await ws.exists(to))) return setStatus(`${to} already exists`, 'error');
+  try {
+    const data = withExamName(await ws.readBytes(file), name);
+    if (to !== file) await ws.rename(file, to);
+    await writeExamFile(to, data);
+  } catch (e) {
+    return setStatus(`Rename failed: ${(e as Error).message}`, 'error');
+  }
+  known.delete(file);
+  app.openFiles = app.openFiles.map((f) => (f === file ? to : f));
+  if (app.current === file) app.current = to;
+  saveTabs();
+  examVersion.n++;
+  await refreshFiles();
+  setStatus(`Renamed ${file} → ${to} (the calculator copy keeps its old name until you send it)`, 'ok');
 }
 
 // ---------------------------------------------------------- workspace
@@ -1359,6 +1554,7 @@ export async function renameFile(file: string): Promise<void> {
     if (isAppOwnFile(appName, file)) return renameApp(appName);
     return renameAppExtraFile(appName, file);
   }
+  if (fileType(file) === 'exam') return renameExamFile(file);
   const kind = kindFromFile(file);
   const ext = file.slice(programNameFromFile(file).length);
   const oldName = programNameFromFile(file);
@@ -1480,6 +1676,7 @@ export async function checkExternalChanges(): Promise<void> {
     }
     for (const file of app.openFiles) {
       if (!list.includes(file) || writing.has(file)) continue;
+      if (fileType(file) === 'exam') continue; // its form reads the file each time it's shown
       const t = await workspace.stat(file);
       const k = known.get(file);
       if (t === null || k === undefined || t === k) continue;

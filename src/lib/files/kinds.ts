@@ -1,7 +1,8 @@
 /**
  * What a workspace path holds and how its text is encoded. Pure (no storage), so it can be tested.
  *
- * Top-level files: `.hpppl`/`.ppl`/`.txt` programs and `.note` notes (UTF-8 text).
+ * Top-level files: `.hpppl`/`.ppl`/`.txt` programs and `.note` notes (UTF-8 text), and
+ * `.hpexammode` exam-mode configurations (raw bytes, see exam.ts).
  * App folders (`<App>.hpappdir/`): `<App>.hpappprgm` and `<App>.hpappnote` in their wire form
  * (UTF-16LE + NUL), `<App>.hpapp` and other binary files raw, `.py` and other text files UTF-8.
  */
@@ -10,9 +11,9 @@ import { decodeNote } from './note';
 
 export const SOURCE_EXT = '.hpppl';
 export const NOTE_EXT = '.note';
-export const ROOT_FILE_RE = /\.(hpppl|ppl|txt|note)$/i;
+export const ROOT_FILE_RE = /\.(hpppl|ppl|txt|note|hpexammode)$/i;
 
-export type FileType = 'program' | 'note' | 'app-program' | 'app-note' | 'python' | 'text' | 'binary';
+export type FileType = 'program' | 'note' | 'exam' | 'app-program' | 'app-note' | 'python' | 'text' | 'binary';
 
 /** Program or note: the kinds sent as standalone calculator objects. */
 export type FileKind = 'program' | 'note';
@@ -21,7 +22,7 @@ const TEXT_IN_APP = /\.(txt|md|csv|json|xml|html?|js|css|ini|cfg|log)$/i;
 
 export function fileType(path: string): FileType {
   const slash = path.indexOf('/');
-  if (slash < 0) return /\.note$/i.test(path) ? 'note' : 'program';
+  if (slash < 0) return /\.note$/i.test(path) ? 'note' : /\.hpexammode$/i.test(path) ? 'exam' : 'program';
   const name = path.slice(slash + 1);
   if (/\.hpappprgm$/i.test(name)) return 'app-program';
   if (/\.hpappnote$/i.test(name)) return 'app-note';
@@ -30,7 +31,7 @@ export function fileType(path: string): FileType {
   return 'binary';
 }
 
-/** Files that open in the editor. (An app program can still turn out to be a binary stub.) */
+/** Files that open in a tab (exam configurations get a form instead of the text editor). */
 export const isEditable = (path: string) => fileType(path) !== 'binary';
 
 /** Monaco language for a path. */
@@ -86,6 +87,7 @@ export function decodeTextFor(path: string, bytes: Uint8Array): string {
     case 'app-note':
       return decodeNote(bytes).text;
     case 'binary':
+    case 'exam':
       throw new BinaryFileError(path);
     default:
       return new TextDecoder().decode(bytes).replace(/^﻿/, '');

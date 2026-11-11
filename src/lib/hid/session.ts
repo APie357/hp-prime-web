@@ -380,12 +380,17 @@ export class PrimeSession {
    * `name` is the calculator name (`&` prefix for built-in apps).
    */
   sendApp(name: string, payload: Uint8Array, verify = true): Promise<SendAppResult> {
+    return this.sendObject(C.ObjType.APP, name, payload, verify);
+  }
+
+  /** Send any object as raw bytes (F7), then read it back with F8 to verify. */
+  sendObject(type: number, name: string, payload: Uint8Array, verify = true): Promise<SendAppResult> {
     return this.exclusive(async () => {
-      const { refused } = await this.sendFileUnlocked(C.ObjType.APP, name, payload);
+      const { refused } = await this.sendFileUnlocked(type, name, payload);
       const res: SendAppResult = { name, bytes: payload.length, refused, verified: 'skipped' };
       if (refused || !verify) return res;
       await sleep(400);
-      const back = await this.requestFileUnlocked(C.ObjType.APP, name, 5000);
+      const back = await this.requestFileUnlocked(type, name, 5000);
       if (!back) res.verified = 'no-reply';
       else {
         res.readback = back.data;

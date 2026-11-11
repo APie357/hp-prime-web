@@ -151,9 +151,21 @@ F8 01 00 00 00 14 06 10 9D 91  4E 00 45 00 57 00 50 00 52 00 4F 00 47 00  00 00
 | `08` | App program | An app's program |
 | `09` | Complex | |
 | `0A` | Real | |
-| `0B` | Exam-mode configuration | |
+| `0B` | Exam-mode configuration | §5.1.1. Format mostly unknown |
 
 Types `02`, `05` and `06` are verified on the G2. The rest come from PrimeDev and hpemu and show up in `F9` backups. Their body formats are not documented here, and this project stores them as raw bytes.
+
+### 5.1.1 Exam-mode configurations (type `0B`)
+
+**Unverified.** The only sample is a Connectivity Kit `.hpexammode` file (the IB Diploma Programme configuration on hpcalc.org, 1156 bytes). Whether a type-`0B` object body is byte-for-byte the same is untested.
+
+| Offset | Size | Content |
+|---|---|---|
+| 0 | 64 | Name, UTF-16LE, NUL-padded (`IB Exam Mode`) |
+| 64 | 1088 | Options and disabled-feature bits. Sample nonzero bytes: `40: 86 06 00 00 00 02 00 00 00 00 00 80 01`, `5B: D0 81 3F 1C E0 00 01 00 C0`, `CC: 50` |
+| 1152 | 4 | `78 00 07 00` (perhaps a 120-minute timeout and flags) |
+
+HP's guides list the options as: name, read-only, timeout (8 h max on the calculator), default angle (or none), password (1–10 characters), memory (keep and restore / erase / hide), Blink LED, and a tree of features to disable: System Apps (each app and its functions), saved apps, physics constants, Help, Units, Matrices, complex numbers, CAS, connectivity (I/O), Notes and Programs, New Notes and Programs, and the Math menu down to single commands. None of these is mapped to a bit yet.
 
 ### 5.2 `F7`: send an object (host → calculator)
 

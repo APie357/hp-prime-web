@@ -8,10 +8,12 @@
     clearChat,
     clearHelp,
     deleteCalcApp,
+    deleteCalcExam,
     deleteCalcObject,
     fetchApp,
     fetchObject,
     openCalcApp,
+    openCalcExam,
     importObject,
     refreshCalcContents,
     restoreFromZip,
@@ -231,6 +233,32 @@
           {/each}
         </ul>
       {/each}
+      {#if ui.examMode}
+        <h3 class="pad">Exam configurations {#if app.calcListedAt}<span class="muted">({app.calcExams.length})</span>{/if}</h3>
+        <ul>
+          {#each app.calcExams as e (e.name)}
+            <li>
+              <span class="name" title={e.name}>{e.name}</span>
+              <span class="muted size">{e.data.length} B</span>
+              <button
+                class="icon-btn"
+                onclick={() => openCalcExam(e.name)}
+                title="Copy into the workspace and open"
+                aria-label="Open exam configuration {e.name}"><Icon name="file_open" /></button
+              >
+              <button
+                class="danger"
+                onclick={() => deleteCalcExam(e.name)}
+                disabled={!!app.busy || e.name === 'Default Exam'}
+                title={e.name === 'Default Exam' ? 'The default configuration can’t be deleted' : 'Delete from the calculator'}
+                aria-label="Delete exam configuration {e.name} from the calculator"><Icon name="delete" /></button
+              >
+            </li>
+          {:else}
+            <li class="muted">{app.calcListedAt ? 'No exam configurations' : notListed}</li>
+          {/each}
+        </ul>
+      {/if}
     </div>
   {/if}
 </section>

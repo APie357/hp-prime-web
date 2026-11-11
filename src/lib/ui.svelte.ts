@@ -57,6 +57,8 @@ export const ui = $state({
   listOnConnect: load<boolean>('listOnConnect', true),
   /** Show the Chat section. */
   chat: load<boolean>('chat', false),
+  /** Exam-mode configurations: list, open, edit, send. */
+  examMode: load<boolean>('examMode', false),
   /** Advanced: fetch an object by name. */
   fetchByName: load<boolean>('fetchByName', false),
   /** Experimental (untested on hardware): backup to .zip and restore. */
@@ -80,7 +82,7 @@ export function setTheme(t: ThemePref): void {
 }
 
 /** On/off settings shown in the Settings dialog. */
-export type Flag = 'remoteKeys' | 'listOnConnect' | 'chat' | 'fetchByName' | 'backupRestore';
+export type Flag = 'remoteKeys' | 'listOnConnect' | 'chat' | 'examMode' | 'fetchByName' | 'backupRestore';
 
 export function setFlag(k: Flag, on: boolean): void {
   ui[k] = on;
