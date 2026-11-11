@@ -153,7 +153,12 @@
           class="act"
           title="Set icon (any image; cropped to a square and scaled to 38×38)"
           aria-label="Set icon of {appDisplayName(name)}"
-          onclick={() => setAppIcon(name)}>🖼</button
+          onclick={() => setAppIcon(name)}
+          ><svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
+            <rect x="1.5" y="2.5" width="13" height="11" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.3" />
+            <circle cx="5.5" cy="6" r="1.3" fill="currentColor" />
+            <path d="M2.5 12.5l3.8-4 2.6 2.6 1.8-1.8 3 3.2" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" />
+          </svg></button
         >
         <button class="act" title="Add a file (e.g. a Python module)" aria-label="Add a file to {appDisplayName(name)}" onclick={() => addAppFile(name)}>＋</button>
         {#if !isSystemApp(name)}
@@ -249,10 +254,21 @@
   }
   .act {
     visibility: hidden;
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    line-height: 1;
+    font-size: 13px;
     background: none;
     border: none;
-    padding: 3px 5px;
     color: var(--muted);
+  }
+  .act svg {
+    display: block;
   }
   .act:hover:not(:disabled) {
     background: var(--hover);
