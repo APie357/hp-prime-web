@@ -107,6 +107,15 @@ export function parseFileMessage(msg: Uint8Array): PrimeFile {
   return { type, name, data: m.slice(10 + nameLen), crcOk, compressed };
 }
 
+// --------------------------------------------------------------- chat (F2)
+
+/** `F2 01 len(u32BE) text(UTF-16LE) 00 00`, sent by the calculator unprompted. */
+export function parseChat(msg: Uint8Array): string {
+  if (msg.length < 6 || msg[0] !== CMD.CHAT || msg[1] !== 0x01) throw new Error('not a chat message');
+  const len = readU32be(msg, 2);
+  return fromUtf16le(msg.subarray(6, 6 + len));
+}
+
 // ------------------------------------------------------- screenshot (FC)
 
 export interface ScreenPayload {

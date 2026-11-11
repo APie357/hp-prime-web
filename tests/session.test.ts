@@ -107,4 +107,34 @@ describe('PrimeSession', () => {
     await s.sendChat('hi ▶ π');
     expect(calc.chats).toEqual(['hi ▶ π']);
   });
+  it('receives chat the calculator sends while idle, and keeps working afterwards', async () => {
+    const { s, calc } = session();
+    const got: string[] = [];
+    s.onChat = (t) => got.push(t);
+    s.listen();
+    calc.say('123456789');
+    await until(() => got.length > 0);
+    expect(got).toEqual(['123456789']);
+    const t0 = Date.now();
+    expect(await s.ready()).toBe(true);
+    expect(Date.now() - t0).toBeLessThan(200); // the idle read yields the link immediately
+    s.listen(false);
+  });
+
+  it('handles chat that arrives ahead of a reply', async () => {
+    const { s, calc } = session();
+    const got: string[] = [];
+    s.onChat = (t) => got.push(t);
+    calc.chatBeforeReply = 'x²+1';
+    expect(await s.ready()).toBe(true);
+    expect(got).toEqual(['x²+1']);
+  });
 });
+
+async function until(cond: () => boolean, ms = 1000) {
+  const end = Date.now() + ms;
+  while (!cond()) {
+    if (Date.now() > end) throw new Error('condition not met');
+    await new Promise((r) => setTimeout(r, 5));
+  }
+}

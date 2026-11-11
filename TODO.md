@@ -24,17 +24,21 @@ The user confirmed on 2026-11-09 that connect, send, receive, list, and fetch wo
   - [x] **Test keys** probe: Home → screenshot → `1` → screenshot → diff → Del; result remembered in localStorage
   - [x] **▶ Send & Run** (Ctrl+Shift+Enter): send → Home, Esc, name via Alpha (+ `( )` and numeric args when the procedure has parameters) → Enter → live screen
   - [x] On the G2: `EC 01 00 00 00 01 code` reaches the calculator but is only *queued*: the key appears when a physical key is pressed (and the battery icon then disappears)
-  - [ ] Try the key modes (all in one message / press + release / then ready check) and record which one, if any, makes keys take effect immediately; then V2 framing as a last resort
-  - [ ] On the G2: is lower case Alpha → Shift → key? Is there a key sequence for `_`?
+  - [x] Try the key modes: on the G2 (2026-11-10) all four (single, batch, release, ready) only add to the key buffer without refreshing the screen
+  - [x] **Send & Run works on the G2** (the program starts)
+  - [ ] Find out why Send & Run takes effect while single keys don't (Enter at the end? the screenshots around it?), so the keypad and Test keys can work too; V2 framing as a last resort
+  - [x] On the G2: lower case is Alpha → Shift → key (confirmed)
+  - [ ] Is there a key sequence for `_`?
 - [x] Delete a program or note on the calculator (`EB`): ✕ in the calculator list, confirmation, then an F8 probe checks it's gone
-  - [ ] On the G2: does EB delete, and what (if anything) does it reply? Record in AGENTS.md
+  - [x] On the G2: EB deletes; the calculator sends no reply (the F8 probe confirms)
 - [x] Notes (type `0x05`): list, fetch, edit, send (plain text; rich formatting is replaced on upload)
 - [x] Verify notes on the G2: plain-text upload shows correctly in the Notes app, and the formatting warning appears for rich notes
 - [ ] Optional: preserve rich formatting when the plain text hasn't changed
 - [x] Set the calculator clock (`E7`) — **Sync clock** button
 - [x] Verify clock sync on the G2 (correct date and time, timezone)
-- [x] Chat send (`F2`, experimental message box in the Calculator panel)
-  - [ ] On the G2: does anything appear? Can the calculator send chat back?
+- [x] Chat (`F2`): send and receive, with a chat log in the Calculator panel
+  - [x] On the G2: sent messages appear on the calculator, and its replies arrive as `F2 01 len(u32BE) UTF-16LE text 00 00`
+  - [ ] Check that receiving works in the web UI (idle listener), including while the live screen is on
 - [x] Full backup to a `.zip` (`src/lib/files/backup.ts`: `manifest.json`, `raw/<type>/<name>.bin` for every object, readable `programs/` and `notes/`)
 - [x] Restore programs and notes from a backup `.zip` (through the verified send path; other object types are skipped)
   - [ ] On the G2: back up, restore, and compare

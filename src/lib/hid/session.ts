@@ -4,9 +4,10 @@
  */
 import { fromUtf16le, utf16le, hex } from './bytes';
 import * as C from './commands';
-import { LegacyFraming, type LinkFraming } from './framing';
+import { LegacyFraming, type LinkFraming, type Reassembler } from './framing';
 import { log } from './log';
 import {
+  parseChat,
   parseFileMessage,
   parseInfo,
   parseScreenMessage,
@@ -85,16 +86,95 @@ export class PrimeSession {
   readonly framing: LinkFraming;
   private chain: Promise<unknown> = Promise.resolve();
   timeouts: Timeouts = { ...DEFAULT_TIMEOUTS };
+  /** Called for chat (F2) messages the calculator sends on its own. */
+  onChat?: (text: string) => void;
+  /** Operations queued or running (excluding the idle listener). */
+  private waiting = 0;
+  private listening = false;
+  private idleRead = false;
+  private idleLoop: Promise<void> | null = null;
+  private idleRe: Reassembler;
 
   constructor(readonly port: ReportPort, framing?: LinkFraming) {
     this.framing = framing ?? new LegacyFraming(port.reportSize - 1);
+    this.idleRe = this.framing.createReassembler();
   }
 
   /** Run `fn` exclusively (queued behind any in-flight operation). */
   private exclusive<T>(fn: () => Promise<T>): Promise<T> {
-    const run = this.chain.then(fn, fn);
+    this.waiting++;
+    // Make the idle listener give up the link, unless it is mid-way through a message.
+    if (this.idleRead && !this.idleRe.pending) this.port.cancelRead?.();
+    const run = this.chain.then(fn, fn).finally(() => this.waiting--);
     this.chain = run.catch(() => undefined);
     return run;
+  }
+
+  /**
+   * Listen for messages the calculator sends unprompted (chat) while no operation is running.
+   * Without this, they sit in the queue until the next operation drains them as stale.
+   */
+  listen(on = true): void {
+    this.listening = on;
+    if (!on) {
+      if (this.idleRead) this.port.cancelRead?.();
+      return;
+    }
+    this.idleLoop ??= this.runIdle().finally(() => {
+      this.idleLoop = null;
+    });
+  }
+
+  private async runIdle(): Promise<void> {
+    while (this.listening) {
+      if (this.waiting) {
+        await this.chain;
+        continue;
+      }
+      const turn = this.chain.then(() => this.idleStep());
+      this.chain = turn.catch(() => undefined);
+      await this.chain;
+    }
+  }
+
+  private async idleStep(): Promise<void> {
+    if (this.waiting || !this.listening) return;
+    this.idleRead = true;
+    let r: Uint8Array | null;
+    try {
+      r = await this.port.read(this.idleRe.pending ? this.timeouts.between : 1000);
+    } finally {
+      this.idleRead = false;
+    }
+    if (!r) {
+      if (this.idleRe.pending && !this.waiting) {
+        log('warn', 'unsolicited message was cut off');
+        this.idleRe.reset();
+      }
+      return;
+    }
+    try {
+      const msg = this.idleRe.push(r);
+      if (msg) this.unsolicited(msg);
+    } catch (e) {
+      log('warn', `unsolicited data: ${(e as Error).message}`);
+    }
+  }
+
+  /** Handle a message nobody asked for. Returns true when it was one (so callers keep waiting). */
+  private unsolicited(msg: Uint8Array): boolean {
+    if (msg[0] === C.CMD.CHAT) {
+      try {
+        const text = parseChat(msg);
+        log('info', `chat from calculator: ${text}`);
+        this.onChat?.(text);
+      } catch (e) {
+        log('warn', `bad chat message: ${(e as Error).message}`);
+      }
+      return true;
+    }
+    log('warn', `unsolicited message: ${hex(msg, 16)}`);
+    return false;
   }
 
   private async sendMessage(msg: Uint8Array): Promise<void> {
@@ -107,6 +187,8 @@ export class PrimeSession {
       const r = await this.port.read(re.pending ? this.timeouts.between : firstTimeout);
       if (!r) throw new TimeoutError(what);
       const msg = re.push(r);
+      // A chat message can arrive ahead of the reply we're waiting for.
+      if (msg && msg[0] === C.CMD.CHAT && this.unsolicited(msg)) continue;
       if (msg) return msg;
     }
   }

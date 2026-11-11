@@ -8,6 +8,8 @@ export interface ReportPort {
   read(timeoutMs: number): Promise<Uint8Array | null>;
   /** Discard queued input reports; returns how many were dropped. */
   drain(): number;
+  /** Wake a pending `read` with null right away (lets an idle listener yield the link). */
+  cancelRead?(): void;
 }
 
 /** FIFO of input reports with async waiting. */

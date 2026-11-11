@@ -47,7 +47,19 @@ export const app = $state({
   padReports: false,
   verifyAfterSend: true,
   showConsole: loadPref('showConsole', false),
+  /** Chat with the calculator, oldest first. */
+  chat: [] as ChatLine[],
 });
+
+export interface ChatLine {
+  dir: 'in' | 'out';
+  text: string;
+  at: number;
+}
+
+function addChat(dir: ChatLine['dir'], text: string): void {
+  app.chat = [...app.chat.slice(-199), { dir, text, at: Date.now() }];
+}
 
 /** Screen mirror. `image` is replaced wholesale, never mutated. */
 export const screen = $state({
@@ -160,6 +172,10 @@ async function openDevice(device: HIDDevice): Promise<void> {
   port = await WebHidPort.open(device);
   port.pad = app.padReports;
   session = new PrimeSession(port);
+  session.onChat = (text) => {
+    addChat('in', text);
+    setStatus(`Message from calculator: ${text}`, 'ok');
+  };
   app.connected = true;
   app.deviceLabel = port.label;
   let ok = false;
@@ -173,11 +189,13 @@ async function openDevice(device: HIDDevice): Promise<void> {
   } catch (e) {
     log('warn', `info: ${(e as Error).message}`);
   }
+  session.listen();
   const fw = app.info?.firmware ? ` · ${app.info.firmware}` : '';
   setStatus(`Connected to ${app.deviceLabel}${fw}${ok ? '' : ' (no ready reply)'}`, ok ? 'ok' : 'info');
 }
 
 export async function disconnect(): Promise<void> {
+  session?.listen(false);
   await port?.close().catch(() => {});
   port = null;
   session = null;
@@ -196,6 +214,7 @@ export function setPadReports(v: boolean) {
 if (app.hidSupported) {
   navigator.hid.addEventListener('disconnect', (e) => {
     if (port && e.device === port.device) {
+      session?.listen(false);
       port = null;
       session = null;
       app.connected = false;
@@ -405,13 +424,19 @@ export async function restoreFromZip(zipFile: File): Promise<void> {
   });
 }
 
-/** F2 chat message (experimental: what the calculator does with it is unverified). */
-export async function sendChatMessage(text: string): Promise<void> {
-  if (!text) return;
-  await busy('Sending message', async () => {
+/** F2 chat message; it shows up in the calculator's chat, which can reply (see `onChat`). */
+export async function sendChatMessage(text: string): Promise<boolean> {
+  if (!text) return false;
+  const ok = await busy('Sending message', async () => {
     await needSession().sendChat(text);
-    setStatus(`Sent message "${text}" (experimental: check the calculator)`, 'ok');
+    addChat('out', text);
+    return true;
   });
+  return ok ?? false;
+}
+
+export function clearChat(): void {
+  app.chat = [];
 }
 
 function downloadBytes(data: Uint8Array, name: string, type: string): void {

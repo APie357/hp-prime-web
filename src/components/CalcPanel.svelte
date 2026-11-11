@@ -3,6 +3,7 @@
   import {
     app,
     backupToZip,
+    clearChat,
     deleteCalcObject,
     fetchObject,
     importObject,
@@ -15,6 +16,13 @@
   let fetchName = $state('');
   let fetchKind = $state<TextKind>('program');
   let chatText = $state('');
+  let chatLog = $state<HTMLOListElement>();
+
+  // Keep the newest message in view.
+  $effect(() => {
+    void app.chat.length;
+    if (chatLog) chatLog.scrollTop = chatLog.scrollHeight;
+  });
   let restoreInput = $state<HTMLInputElement>();
 
   function onRestorePick(e: Event) {
@@ -79,17 +87,32 @@
       <button type="submit" disabled={!!app.busy || !fetchName.trim()}>Fetch</button>
     </form>
 
-    <form
-      class="pad row"
-      onsubmit={(e) => {
-        e.preventDefault();
-        sendChatMessage(chatText);
-        chatText = '';
-      }}
-    >
-      <input placeholder="Message to calculator (experimental)" bind:value={chatText} />
-      <button type="submit" disabled={!!app.busy || !chatText}>Send</button>
-    </form>
+    <div class="chat">
+      <h3 class="pad">
+        Chat
+        {#if app.chat.length}<button class="link" onclick={clearChat} title="Clear the chat log">clear</button>{/if}
+      </h3>
+      {#if app.chat.length}
+        <ol class="chat-log" bind:this={chatLog}>
+          {#each app.chat as line, i (i)}
+            <li class={line.dir} title={new Date(line.at).toLocaleTimeString()}>
+              <span class="who">{line.dir === 'in' ? 'Calc' : 'You'}</span>
+              <span class="text">{line.text}</span>
+            </li>
+          {/each}
+        </ol>
+      {/if}
+      <form
+        class="pad row"
+        onsubmit={async (e) => {
+          e.preventDefault();
+          if (await sendChatMessage(chatText)) chatText = '';
+        }}
+      >
+        <input placeholder="Message to calculator" bind:value={chatText} />
+        <button type="submit" disabled={!!app.busy || !chatText}>Send</button>
+      </form>
+    </div>
 
     <div class="lists">
       {#each [{ title: 'Programs', items: programs, kind: 'program' }, { title: 'Notes', items: notes, kind: 'note' }] as group (group.kind)}
@@ -190,6 +213,43 @@
   li button {
     font-size: 12px;
     padding: 1px 8px;
+  }
+  .chat-log {
+    max-height: 140px;
+    overflow: auto;
+    padding: 0 0 4px;
+  }
+  .chat-log li {
+    align-items: baseline;
+    padding: 1px 10px;
+  }
+  .chat-log .who {
+    flex: none;
+    width: 34px;
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .chat-log li.in .who {
+    color: #4ec9b0;
+  }
+  .chat-log .text {
+    flex: 1;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+    font-family: var(--mono);
+  }
+  h3 .link {
+    float: right;
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: none;
+    cursor: pointer;
+  }
+  h3 .link:hover {
+    color: var(--fg);
   }
   li button.danger:hover:not(:disabled) {
     color: #f48771;

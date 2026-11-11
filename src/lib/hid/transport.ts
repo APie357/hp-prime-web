@@ -87,6 +87,10 @@ export class WebHidPort implements ReportPort {
     return this.queue.drain();
   }
 
+  cancelRead(): void {
+    this.queue.abort();
+  }
+
   async close(): Promise<void> {
     this.device.removeEventListener('inputreport', this.onReport);
     this.queue.abort();
