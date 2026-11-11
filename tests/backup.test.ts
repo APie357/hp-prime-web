@@ -1,3 +1,4 @@
+/// <reference types="node" />
 import { describe, expect, it } from 'vitest';
 import { unzipSync } from 'fflate';
 import { utf16le, concat } from '../src/lib/hid/bytes';
@@ -10,7 +11,7 @@ describe('backup zip', () => {
   const files = [
     file(0x06, 'HELLO', utf16le('EXPORT HELLO()\nBEGIN\nEND;')),
     file(0x05, 'My: note', concat(utf16le('buy ▶ batteries'), [0, 0])),
-    file(0x02, 'Function', Uint8Array.of(1, 2, 3)),
+    file(0x02, 'Function', Uint8Array.of(1, 2, 3)), // not valid app data: raw only
     file(0x06, 'hello', utf16le('x')),
   ];
   const zip = buildBackupZip(files, { label: 'HP Prime G2', firmware: 'V2.060.650' }, new Date(2026, 10, 10, 9, 5));
@@ -42,5 +43,18 @@ describe('backup zip', () => {
     expect(safeFileName('a/b:c')).toBe('a_b_c');
     expect(safeFileName('..x')).toBe('_x');
     expect(backupFileName('HP Prime G2', new Date(2026, 10, 10, 9, 5))).toBe('HP-Prime-G2-backup-2026-11-10_0905.zip');
+  });
+});
+
+describe('backup zip apps', () => {
+  it('adds apps in the workspace folder layout', async () => {
+    const { readFileSync } = await import('node:fs');
+    const fn = new Uint8Array(readFileSync(new URL('./fixtures/function.app.bin', import.meta.url)));
+    const e = unzipSync(buildBackupZip([file(0x02, '&Function', fn)], undefined));
+    expect(Object.keys(e).filter((k) => k.startsWith('apps/')).sort()).toEqual([
+      'apps/&Function.hpappdir/&Function.hpapp',
+      'apps/&Function.hpappdir/&Function.hpappnote',
+      'apps/&Function.hpappdir/&Function.hpappprgm',
+    ]);
   });
 });

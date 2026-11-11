@@ -53,6 +53,13 @@ export class MockPrime implements ReportPort {
     this.q.abort();
   }
 
+  /** The calculator's own Send key (Apps, Program Catalog, Notes): an unprompted F7. */
+  sendObject(type: number, name: string, data: Uint8Array) {
+    this.reply(C.sendFile(type, name, data));
+  }
+  /** Interleave this object ahead of the next ready reply. */
+  objectBeforeReply: [number, string, Uint8Array] | null = null;
+
   /** The calculator sends a chat message on its own (Chat app → send). */
   say(text: string) {
     this.reply(C.withLengthHeader(C.CMD.CHAT, concat(utf16le(text), [0, 0])));
@@ -69,6 +76,10 @@ export class MockPrime implements ReportPort {
   private handle(msg: Uint8Array) {
     switch (msg[0]) {
       case C.CMD.READY:
+        if (this.objectBeforeReply) {
+          this.sendObject(...this.objectBeforeReply);
+          this.objectBeforeReply = null;
+        }
         if (this.chatBeforeReply) {
           this.say(this.chatBeforeReply);
           this.chatBeforeReply = '';
@@ -88,7 +99,9 @@ export class MockPrime implements ReportPort {
         const name = fromUtf16le(msg.subarray(10, 10 + nameLen));
         const data = this.objects.get(`${type}:${name}`);
         if (data === undefined) return; // silent
-        return this.reply(C.sendFile(type, name, concat(data, [0, 0])));
+        // Programs and notes come back with a UTF-16 NUL appended (as on the G2); other objects as stored.
+        const body = type === C.ObjType.PROGRAM || type === C.ObjType.NOTE ? concat(data, [0, 0]) : data;
+        return this.reply(C.sendFile(type, name, body));
       }
       case C.CMD.BACKUP: {
         for (const [key, data] of this.objects) {

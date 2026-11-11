@@ -2,7 +2,7 @@
  * PrimeSession — the request/response layer on top of a ReportPort.
  * All operations are serialized: the Prime link is strictly half-duplex.
  */
-import { fromUtf16le, utf16le, hex } from './bytes';
+import { bytesEqual, fromUtf16le, utf16le, hex } from './bytes';
 import * as C from './commands';
 import { LegacyFraming, type LinkFraming, type Reassembler } from './framing';
 import { log } from './log';
@@ -70,6 +70,13 @@ export function isValidName(kind: TextKind, name: string): boolean {
 export type KeyMode = 'single' | 'batch' | 'release' | 'ready';
 export const KEY_MODES: KeyMode[] = ['single', 'batch', 'release', 'ready'];
 
+export interface SendAppResult {
+  name: string;
+  bytes: number;
+  refused: boolean;
+  verified: 'match' | 'mismatch' | 'no-reply' | 'skipped';
+}
+
 export interface DeleteResult {
   /** The calculator answered with an F9 (refusal) frame. */
   refused: boolean;
@@ -86,6 +93,10 @@ export class PrimeSession {
   readonly framing: LinkFraming;
   private chain: Promise<unknown> = Promise.resolve();
   timeouts: Timeouts = { ...DEFAULT_TIMEOUTS };
+  /** Called for objects (F7) the calculator sends on its own: its Send key in Apps, Program Catalog, Notes. */
+  onObject?: (file: PrimeFile) => void;
+  /** True while an operation is waiting for an F7 (F8 fetch, backup); other F7s are unsolicited. */
+  private expectFile = false;
   /** Called for chat (F2) messages the calculator sends on its own. "" = the Messages app's Help key. */
   onChat?: (text: string) => void;
   /** Operations queued or running (excluding the idle listener). */
@@ -173,6 +184,17 @@ export class PrimeSession {
       }
       return true;
     }
+    if (msg[0] === C.CMD.FILE) {
+      try {
+        const f = parseFileMessage(msg);
+        if (!f.crcOk) log('warn', `CRC mismatch on ${f.name} sent by the calculator`);
+        log('info', `calculator sent ${C.OBJ_TYPE_NAMES[f.type] ?? `type ${f.type}`} "${f.name}" (${f.data.length} B)`);
+        this.onObject?.(f);
+      } catch (e) {
+        log('warn', `bad object from calculator: ${(e as Error).message}`);
+      }
+      return true;
+    }
     log('warn', `unsolicited message: ${hex(msg, 16)}`);
     return false;
   }
@@ -187,8 +209,9 @@ export class PrimeSession {
       const r = await this.port.read(re.pending ? this.timeouts.between : firstTimeout);
       if (!r) throw new TimeoutError(what);
       const msg = re.push(r);
-      // A chat message can arrive ahead of the reply we're waiting for.
+      // Chat, or an object from the calculator's Send key, can arrive ahead of the reply we wait for.
       if (msg && msg[0] === C.CMD.CHAT && this.unsolicited(msg)) continue;
+      if (msg && msg[0] === C.CMD.FILE && !this.expectFile && this.unsolicited(msg)) continue;
       if (msg) return msg;
     }
   }
@@ -232,6 +255,7 @@ export class PrimeSession {
   }
 
   private async requestFileUnlocked(type: number, name: string, timeoutMs: number): Promise<PrimeFile | null> {
+    this.expectFile = true;
     try {
       const r = await this.exchange(C.requestFile(type, name), `file ${name}`, timeoutMs);
       if (r[0] !== C.CMD.FILE) throw new Error(`unexpected reply to F8: ${hex(r, 12)}`);
@@ -241,6 +265,8 @@ export class PrimeSession {
     } catch (e) {
       if (e instanceof TimeoutError) return null;
       throw e;
+    } finally {
+      this.expectFile = false;
     }
   }
 
@@ -314,32 +340,59 @@ export class PrimeSession {
       this.port.drain();
       await this.sendMessage(C.requestBackup());
       const files: PrimeFile[] = [];
-      for (;;) {
-        let msg: Uint8Array;
-        try {
-          msg = await this.recvMessage('backup data', files.length ? 5000 : 10000);
-        } catch (e) {
-          if (e instanceof TimeoutError && files.length) {
-            log('warn', 'backup stream went quiet; assuming complete');
-            break;
+      this.expectFile = true;
+      try {
+        for (;;) {
+          let msg: Uint8Array;
+          try {
+            msg = await this.recvMessage('backup data', files.length ? 5000 : 10000);
+          } catch (e) {
+            if (e instanceof TimeoutError && files.length) {
+              log('warn', 'backup stream went quiet; assuming complete');
+              break;
+            }
+            throw e;
           }
-          throw e;
+          if (msg[0] === C.CMD.BACKUP) break;
+          if (msg[0] !== C.CMD.FILE) {
+            log('warn', `unexpected message in backup: ${hex(msg, 12)}`);
+            continue;
+          }
+          try {
+            const f = parseFileMessage(msg);
+            files.push(f);
+            onProgress?.({ count: files.length, last: f });
+          } catch (e) {
+            log('error', `bad file in backup: ${(e as Error).message}`);
+          }
         }
-        if (msg[0] === C.CMD.BACKUP) break;
-        if (msg[0] !== C.CMD.FILE) {
-          log('warn', `unexpected message in backup: ${hex(msg, 12)}`);
-          continue;
-        }
-        try {
-          const f = parseFileMessage(msg);
-          files.push(f);
-          onProgress?.({ count: files.length, last: f });
-        } catch (e) {
-          log('error', `bad file in backup: ${(e as Error).message}`);
-        }
+      } finally {
+        this.expectFile = false;
       }
       return files;
     });
+  }
+
+  /**
+   * Send an app (type 02 payload, see files/app.ts) and read it back with F8 to verify.
+   * `name` is the calculator name (`&` prefix for built-in apps).
+   */
+  sendApp(name: string, payload: Uint8Array, verify = true): Promise<SendAppResult> {
+    return this.exclusive(async () => {
+      const { refused } = await this.sendFileUnlocked(C.ObjType.APP, name, payload);
+      const res: SendAppResult = { name, bytes: payload.length, refused, verified: 'skipped' };
+      if (refused || !verify) return res;
+      await sleep(400);
+      const back = await this.requestFileUnlocked(C.ObjType.APP, name, 5000);
+      if (!back) res.verified = 'no-reply';
+      else res.verified = sameIgnoringTrailingZeros(back.data, payload) ? 'match' : 'mismatch';
+      return res;
+    });
+  }
+
+  /** F8 for an app; null when the calculator stays silent. */
+  readApp(name: string, timeoutMs = 5000): Promise<PrimeFile | null> {
+    return this.requestFile(C.ObjType.APP, name, timeoutMs);
   }
 
   /**
@@ -443,6 +496,12 @@ export class PrimeSession {
       }
     });
   }
+}
+
+/** Equal, allowing extra zero bytes at the end of `got` (the calculator pads some replies). */
+function sameIgnoringTrailingZeros(got: Uint8Array, want: Uint8Array): boolean {
+  if (got.length < want.length || !bytesEqual(got.subarray(0, want.length), want)) return false;
+  return got.subarray(want.length).every((b) => b === 0);
 }
 
 /** Line endings → "\n", strip BOM. */

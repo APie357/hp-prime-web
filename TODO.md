@@ -48,6 +48,13 @@ The user confirmed on 2026-11-09 that connect, send, receive, list, and fetch wo
 - [x] Auto-reconnect to an already-granted calculator on page load and when it's plugged back in
   - [ ] Check in Chrome on hardware
 - [ ] V2 negotiated transport (`FF EC …`), only if legacy framing misbehaves on some firmware
+- [x] Apps (built 2026-11-10; format verified on a G2 backup, sending untested):
+  - [x] Calculator's **Send** key (Apps, Program Catalog, Notes) → prompt → saved to the workspace
+  - [x] Apps as `<Name>.hpappdir/` folders: program, Info note, extra files (Python modules) editable; app data and binary files sent as-is
+  - [x] List apps (Calculator panel), fetch by name, open into the workspace, delete custom apps (EB type 02)
+  - [x] Send an app (overwrite check, read-back verify); ＋ App creates one from a base app's data
+  - [ ] On the G2: does sending an app work? Does a new app (copied bag, new name) appear in the Apps screen? Does F8 fetch one app?
+  - [ ] ▶ Run an app (deferred): e.g. send a helper program that calls `STARTAPP("Name")`, then start it like Send & Run
 
 ## 3. Editor / language support (paused — resume later)
 - [x] Command catalog with signatures and docs (`src/lib/lang/catalog.ts`, all 163 commands from hpemu `builtins.rs`; not yet wired into the editor)

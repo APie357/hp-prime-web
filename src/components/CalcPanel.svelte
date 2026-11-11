@@ -1,12 +1,16 @@
 <script lang="ts">
   import type { TextKind } from '../lib/hid/session';
+  import { appDisplayName, isSystemApp } from '../lib/files/app';
   import {
     app,
     backupToZip,
     clearChat,
     clearHelp,
+    deleteCalcApp,
     deleteCalcObject,
+    fetchApp,
     fetchObject,
+    openCalcApp,
     importObject,
     refreshCalcContents,
     restoreFromZip,
@@ -15,7 +19,7 @@
   } from '../lib/state.svelte';
 
   let fetchName = $state('');
-  let fetchKind = $state<TextKind>('program');
+  let fetchKind = $state<TextKind | 'app'>('program');
   let chatText = $state('');
   let chatLog = $state<HTMLOListElement>();
 
@@ -77,12 +81,14 @@
       class="pad row"
       onsubmit={(e) => {
         e.preventDefault();
-        fetchObject(fetchKind, fetchName);
+        if (fetchKind === 'app') fetchApp(fetchName);
+        else fetchObject(fetchKind, fetchName);
       }}
     >
       <select bind:value={fetchKind} aria-label="Object type">
         <option value="program">Program</option>
         <option value="note">Note</option>
+        <option value="app">App</option>
       </select>
       <input placeholder="Name" bind:value={fetchName} spellcheck="false" />
       <button type="submit" disabled={!!app.busy || !fetchName.trim()}>Fetch</button>
@@ -125,6 +131,25 @@
     </div>
 
     <div class="lists">
+      <h3 class="pad">Apps {#if app.calcListedAt}<span class="muted">({app.calcApps.length})</span>{/if}</h3>
+      <ul>
+        {#each app.calcApps as a (a.name)}
+          <li>
+            <span class="name" title={a.name}>{appDisplayName(a.name)}</span>
+            <span class="muted size" title="Based on">{isSystemApp(a.name) ? 'built-in' : a.base}</span>
+            <button onclick={() => openCalcApp(a.name)} title="Copy into the workspace and open">Open</button>
+            <button
+              class="danger"
+              onclick={() => deleteCalcApp(a.name)}
+              disabled={!!app.busy || isSystemApp(a.name)}
+              title={isSystemApp(a.name) ? 'Built-in apps can’t be deleted' : 'Delete from the calculator'}
+              aria-label="Delete app {a.name} from the calculator">✕</button
+            >
+          </li>
+        {:else}
+          <li class="muted">{app.calcListedAt ? 'No apps' : 'Click “List contents” to read them'}</li>
+        {/each}
+      </ul>
       {#each [{ title: 'Programs', items: programs, kind: 'program' }, { title: 'Notes', items: notes, kind: 'note' }] as group (group.kind)}
         <h3 class="pad">{group.title} {#if app.calcListedAt}<span class="muted">({group.items.length})</span>{/if}</h3>
         <ul>

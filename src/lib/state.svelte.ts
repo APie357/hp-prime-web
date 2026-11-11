@@ -10,6 +10,22 @@ import { K, keysToRun } from './hid/keys';
 import { decodeScreen, diffFraction, type PixelMode, type RgbaImage } from './screen';
 import { runTarget } from './lang/symbols';
 import {
+  appDirName,
+  appDisplayName,
+  appOfPath,
+  appToFolder,
+  baseAppOf,
+  buildAppPayload,
+  decodeAppProgram,
+  encodeAppText,
+  folderToApp,
+  isSystemApp,
+  isValidAppName,
+  newAppProgram,
+  parseAppPayload,
+} from './files/app';
+import { BinaryFileError, fileType, languageFor } from './files/kinds';
+import {
   fileFor,
   kindFromFile,
   pickFolder,
@@ -19,6 +35,21 @@ import {
   useBrowserWorkspace,
   type Workspace,
 } from './files/workspace';
+
+/** An app seen on the calculator (from a listing or its Send key). */
+export interface CalcApp {
+  /** Calculator name; built-in apps start with `&`. */
+  name: string;
+  base: string;
+  payload: Uint8Array;
+}
+
+/** A base an app can be created from. */
+export interface AppBase {
+  label: string;
+  bag: Uint8Array;
+  base: string;
+}
 
 /** A program or note seen on the calculator. */
 export interface CalcObject {
@@ -51,6 +82,10 @@ export const app = $state({
   chat: [] as ChatLine[],
   /** The calculator pressed Help in Messages and it hasn't been cleared from here. */
   helpPending: false,
+  /** Apps on the calculator, from the last listing. */
+  calcApps: [] as CalcApp[],
+  /** "New app" dialog is open. */
+  newAppOpen: false,
   /** Files open in editor tabs, in tab order. */
   openFiles: [] as string[],
   /** Side-by-side comparison waiting for the user (see `showDiff`). */
@@ -90,7 +125,7 @@ export function closeDiff(action: string | null): void {
   d?.resolve(action);
 }
 
-const langFor = (file: string) => (kindFromFile(file) === 'note' ? 'plaintext' : 'hpppl');
+const langFor = languageFor;
 
 export interface ChatLine {
   dir: 'in' | 'out';
@@ -217,6 +252,7 @@ async function openDevice(device: HIDDevice): Promise<void> {
   port = await WebHidPort.open(device);
   port.pad = app.padReports;
   session = new PrimeSession(port);
+  session.onObject = (f) => queueIncoming(f);
   session.onChat = (text) => {
     if (!text) {
       addChat('in', '', true);
@@ -292,6 +328,8 @@ export async function sendCurrent(): Promise<boolean> {
     setStatus('Open a file first', 'error');
     return false;
   }
+  const appName = appOfPath(file);
+  if (appName) return sendAppFolder(appName);
   const text = editorBridge.getText(file);
   if (text === null) return false;
   await saveCurrent();
@@ -374,9 +412,17 @@ export async function refreshCalcContents(): Promise<void> {
       objs.set(`${kind}:${f.name}`, { kind, name: f.name, ...decodeText(kind, f.data) });
     }
     app.calcObjects = [...objs.values()].sort((a, b) => a.name.localeCompare(b.name));
+    app.calcApps = files
+      .filter((f) => f.type === ObjType.APP)
+      .map((f) => calcAppFrom(f))
+      .filter((a): a is CalcApp => !!a)
+      .sort((a, b) => Number(isSystemApp(a.name)) - Number(isSystemApp(b.name)) || a.name.localeCompare(b.name));
     app.calcListedAt = Date.now();
     const n = (k: TextKind) => app.calcObjects.filter((o) => o.kind === k).length;
-    setStatus(`Found ${n('program')} program(s) and ${n('note')} note(s) in ${files.length} objects`, 'ok');
+    setStatus(
+      `Found ${app.calcApps.length} app(s), ${n('program')} program(s) and ${n('note')} note(s) in ${files.length} objects`,
+      'ok',
+    );
   });
 }
 
@@ -651,7 +697,7 @@ export async function probeKeys(): Promise<void> {
 /** Send the open program, then start it from the Home view with injected keys and mirror the screen. */
 export async function sendAndRun(): Promise<void> {
   const file = app.current;
-  if (!file || kindFromFile(file) !== 'program') return setStatus('Open a program to run it', 'error');
+  if (!file || fileType(file) !== 'program') return setStatus('Open a program to run it', 'error');
   const text = editorBridge.getText(file);
   if (text === null) return;
   const target = runTarget(programNameFromFile(file), text);
@@ -687,6 +733,370 @@ export async function sendAndRun(): Promise<void> {
     }
   });
   setLive(true);
+}
+
+// ------------------------------------------------------------------ apps
+
+function calcAppFrom(f: PrimeFile): CalcApp | null {
+  try {
+    return { name: f.name, base: baseAppOf(parseAppPayload(f.data).bag), payload: f.data };
+  } catch (e) {
+    log('warn', `app ${f.name}: ${(e as Error).message}`);
+    return null;
+  }
+}
+
+const appFilesOf = (name: string) => app.files.filter((f) => f.startsWith(appDirName(name) + '/'));
+
+function isAppOwnFile(name: string, path: string): boolean {
+  const inner = path.slice(appDirName(name).length + 1).toLowerCase();
+  return ['.hpapp', '.hpappnote', '.hpappprgm'].some((x) => inner === (name + x).toLowerCase());
+}
+
+/** Local app names (folders) in the workspace. */
+export function workspaceApps(files: string[]): string[] {
+  return [...new Set(files.map(appOfPath).filter((a): a is string => !!a))].sort((a, b) =>
+    appDisplayName(a).localeCompare(appDisplayName(b)),
+  );
+}
+
+/** Write an app received from the calculator into `<Name>.hpappdir/` (asks before replacing a different copy). */
+export async function saveAppToWorkspace(name: string, payload: Uint8Array): Promise<boolean> {
+  const parts = parseAppPayload(payload);
+  const ws = await ensureWorkspace();
+  const existing = appFilesOf(name);
+  if (existing.length) {
+    try {
+      const local = buildAppPayload(await readAppFolder(name));
+      if (local.length === payload.length && local.every((b, i) => b === payload[i])) {
+        openAppMain(name);
+        return true;
+      }
+    } catch {
+      /* unreadable local copy: offer to replace it */
+    }
+    if (!confirm(`App "${appDisplayName(name)}" already exists in the workspace and differs. Replace it with the calculator's version?`)) {
+      return false;
+    }
+    for (const f of existing) {
+      if (app.dirty.includes(f)) app.dirty = app.dirty.filter((d) => d !== f);
+    }
+    await ws.removeDir(appDirName(name));
+  }
+  for (const e of appToFolder(name, parts)) {
+    await ws.writeBytes(e.path, e.data);
+    const t = await ws.stat(e.path);
+    if (t !== null) known.set(e.path, t);
+    // Refresh open tabs of this app with the new contents.
+    if (app.openFiles.includes(e.path)) {
+      try {
+        editorBridge.setText(e.path, await ws.read(e.path));
+      } catch {
+        /* binary */
+      }
+    }
+  }
+  await refreshFiles();
+  openAppMain(name);
+  return true;
+}
+
+/** Open an app's program (or, for built-ins with a compiled stub, its note). */
+function openAppMain(name: string): void {
+  const dir = appDirName(name);
+  const prgm = `${dir}/${name}.hpappprgm`;
+  const note = `${dir}/${name}.hpappnote`;
+  const pick = app.files.includes(prgm) ? prgm : note;
+  void ensureWorkspace()
+    .then((ws) => ws.readBytes(prgm))
+    .then((b) => openFile(decodeAppProgram(b) === null ? note : pick))
+    .catch(() => app.files.includes(note) && openFile(note));
+}
+
+async function readAppFolder(name: string) {
+  const ws = await ensureWorkspace();
+  const dir = appDirName(name);
+  const entries = [];
+  for (const path of appFilesOf(name)) {
+    // Unsaved edits in open tabs count.
+    const text = app.dirty.includes(path) ? editorBridge.getText(path) : null;
+    const data = text !== null ? encodeTextForApp(path, text) : await ws.readBytes(path);
+    entries.push({ name: path.slice(dir.length + 1), data });
+  }
+  return folderToApp(name, entries);
+}
+
+function encodeTextForApp(path: string, text: string): Uint8Array {
+  const t = fileType(path);
+  return t === 'app-program' || t === 'app-note' ? encodeAppText(text) : new TextEncoder().encode(text);
+}
+
+/** Send a workspace app to the calculator (overwrite check, then read-back verification). */
+export async function sendAppFolder(name: string): Promise<boolean> {
+  const ok = await busy(`Sending app ${appDisplayName(name)}`, async (): Promise<boolean> => {
+    for (const f of appFilesOf(name)) if (app.dirty.includes(f)) await saveFile(f);
+    const payload = buildAppPayload(await readAppFolder(name));
+    const s = needSession();
+    setStatus(`Checking whether app ${appDisplayName(name)} exists on the calculator…`);
+    const existing = await s.readApp(name, 2000);
+    if (existing) {
+      const what = isSystemApp(name)
+        ? `This replaces the built-in ${appDisplayName(name)} app's settings and program on the calculator.`
+        : `App "${name}" already exists on the calculator.`;
+      if (!confirm(`${what} Overwrite it?`)) {
+        setStatus('Send cancelled');
+        return false;
+      }
+    }
+    setStatus(`Sending app ${appDisplayName(name)} (${payload.length} B)…`);
+    const r = await s.sendApp(name, payload, app.verifyAfterSend);
+    if (r.refused) {
+      setStatus(`Calculator refused app ${appDisplayName(name)}`, 'error');
+      return false;
+    }
+    const sent = calcAppFrom({ type: ObjType.APP, name, data: payload, crcOk: true, compressed: false });
+    if (sent) app.calcApps = [...app.calcApps.filter((a) => a.name !== name), sent];
+    switch (r.verified) {
+      case 'match':
+        setStatus(`Sent app ${appDisplayName(name)} (${r.bytes} B) — read-back verified ✓`, 'ok');
+        return true;
+      case 'mismatch':
+        setStatus(`Sent app ${appDisplayName(name)}, but the read-back differs (the calculator may have normalised it)`, 'error');
+        return false;
+      case 'no-reply':
+        setStatus(`Sent app ${appDisplayName(name)} (${r.bytes} B); the read-back got no reply`, 'error');
+        return true;
+      default:
+        setStatus(`Sent app ${appDisplayName(name)} (${r.bytes} B)`, 'ok');
+        return true;
+    }
+  });
+  return ok ?? false;
+}
+
+/** Fetch one app from the calculator by name and save it into the workspace. */
+export async function fetchApp(name: string): Promise<void> {
+  name = name.trim();
+  if (!name) return;
+  await busy(`Fetching app ${name}`, async () => {
+    const s = needSession();
+    let f = await s.readApp(name);
+    if (!f && !isSystemApp(name)) f = await s.readApp('&' + name, 3000);
+    if (!f) return setStatus(`No app named "${name}" answered (names are case-sensitive)`, 'error');
+    const a = calcAppFrom(f);
+    if (!a) return setStatus(`App ${f.name} couldn't be read (see console)`, 'error');
+    app.calcApps = [...app.calcApps.filter((x) => x.name !== a.name), a];
+    if (await saveAppToWorkspace(a.name, a.payload)) setStatus(`Fetched app ${appDisplayName(a.name)} (${a.base})`, 'ok');
+  });
+}
+
+/** Save an app from the last calculator listing into the workspace. */
+export async function openCalcApp(name: string): Promise<void> {
+  const a = app.calcApps.find((x) => x.name === name);
+  if (!a) return;
+  try {
+    if (await saveAppToWorkspace(a.name, a.payload)) setStatus(`Saved app ${appDisplayName(name)} to the workspace`, 'ok');
+  } catch (e) {
+    setStatus(`App ${name}: ${(e as Error).message}`, 'error');
+  }
+}
+
+/** Delete a custom app from the calculator (built-in apps can only be reset on the calculator). */
+export async function deleteCalcApp(name: string): Promise<void> {
+  if (isSystemApp(name)) return setStatus('Built-in apps can’t be deleted (reset them on the calculator instead)', 'error');
+  if (!confirm(`Delete app "${name}" from the calculator? This can't be undone (your workspace copy, if any, is kept).`)) return;
+  await busy(`Deleting app ${name}`, async () => {
+    const r = await needSession().deleteObject(ObjType.APP, name);
+    if (r.refused) return setStatus(`The calculator refused to delete app "${name}"`, 'error');
+    if (!r.gone) return setStatus(`Sent delete for app "${name}", but it still answers a fetch`, 'error');
+    app.calcApps = app.calcApps.filter((a) => a.name !== name);
+    setStatus(`Deleted app "${name}" from the calculator ✓`, 'ok');
+  });
+}
+
+/** Delete an app folder from the workspace. */
+export async function deleteAppFolder(name: string): Promise<void> {
+  if (!confirm(`Delete app ${appDisplayName(name)} (${appDirName(name)}) from ${app.workspaceLabel}? (The calculator copy is not affected.)`)) return;
+  const files = appFilesOf(name);
+  await (await ensureWorkspace()).removeDir(appDirName(name));
+  for (const f of files) {
+    dropTab(f);
+    editorBridge.forget(f);
+    known.delete(f);
+  }
+  app.dirty = app.dirty.filter((f) => !files.includes(f));
+  await refreshFiles();
+}
+
+/** Rename an app: the folder and its own three files. */
+export async function renameApp(name: string): Promise<void> {
+  if (isSystemApp(name)) return setStatus('Built-in apps keep their names', 'error');
+  const to = prompt(`Rename app ${name} to:`, name)?.trim();
+  if (!to || to === name) return;
+  if (!isValidAppName(to)) return setStatus(`"${to}" is not a valid app name`, 'error');
+  const ws = await ensureWorkspace();
+  if (await ws.exists(appDirName(to))) return setStatus(`${appDirName(to)} already exists`, 'error');
+  for (const f of appFilesOf(name)) if (app.dirty.includes(f)) await saveFile(f);
+  const parts = await readAppFolder(name);
+  for (const e of appToFolder(to, parts)) await ws.writeBytes(e.path, e.data);
+  const old = appFilesOf(name);
+  await ws.removeDir(appDirName(name));
+  const map = (f: string) => {
+    const inner = f.slice(appDirName(name).length + 1);
+    const renamed = inner.toLowerCase().startsWith(name.toLowerCase() + '.hpapp') ? to + inner.slice(name.length) : inner;
+    return `${appDirName(to)}/${renamed}`;
+  };
+  for (const f of old) {
+    editorBridge.rename(f, map(f));
+    known.delete(f);
+  }
+  app.openFiles = app.openFiles.map((f) => (old.includes(f) ? map(f) : f));
+  if (app.current && old.includes(app.current)) app.current = map(app.current);
+  saveTabs();
+  await refreshFiles();
+  setStatus(`Renamed app ${name} → ${to} (the calculator copy keeps its old name until you send it)`, 'ok');
+}
+
+async function renameAppExtraFile(appName: string, file: string): Promise<void> {
+  const dir = appDirName(appName);
+  const oldInner = file.slice(dir.length + 1);
+  const inner = prompt(`Rename ${oldInner} to:`, oldInner)?.trim();
+  if (!inner || inner === oldInner) return;
+  if (!/^[^\/:*?"<>| -]{1,64}$/.test(inner) || isAppOwnFile(appName, `${dir}/${inner}`)) {
+    return setStatus(`"${inner}" can't be used as a file name here`, 'error');
+  }
+  const to = `${dir}/${inner}`;
+  const ws = await ensureWorkspace();
+  if (await ws.exists(to)) return setStatus(`${to} already exists`, 'error');
+  if (app.dirty.includes(file)) await saveFile(file);
+  await ws.rename(file, to);
+  editorBridge.rename(file, to);
+  known.delete(file);
+  app.openFiles = app.openFiles.map((f) => (f === file ? to : f));
+  if (app.current === file) app.current = to;
+  saveTabs();
+  await refreshFiles();
+}
+
+/** Add a new text file (e.g. a Python module) to an app folder. */
+export async function addAppFile(appName: string): Promise<void> {
+  const inner = prompt('New file name (e.g. module.py):', 'module.py')?.trim();
+  if (!inner) return;
+  const dir = appDirName(appName);
+  if (!/^[^\/:*?"<>| -]{1,64}$/.test(inner) || isAppOwnFile(appName, `${dir}/${inner}`)) {
+    return setStatus(`"${inner}" can't be used as a file name here`, 'error');
+  }
+  const path = `${dir}/${inner}`;
+  const ws = await ensureWorkspace();
+  if (await ws.exists(path)) return setStatus(`${path} already exists`, 'error');
+  await writeTracked(path, '');
+  await refreshFiles();
+  openFile(path);
+}
+
+/** Bases a new app can copy: apps listed on the calculator and app folders in the workspace. */
+export async function appBases(): Promise<AppBase[]> {
+  const out = new Map<string, AppBase>();
+  for (const a of app.calcApps) {
+    try {
+      const bag = parseAppPayload(a.payload).bag;
+      out.set(a.name, { label: `${appDisplayName(a.name)} (calculator)`, bag, base: a.base });
+    } catch {
+      /* skip */
+    }
+  }
+  const ws = workspace;
+  if (ws) {
+    for (const name of workspaceApps(app.files)) {
+      if (out.has(name)) continue;
+      try {
+        const bag = await ws.readBytes(`${appDirName(name)}/${name}.hpapp`);
+        out.set(name, { label: `${appDisplayName(name)} (workspace)`, bag, base: baseAppOf(bag) });
+      } catch {
+        /* no bag */
+      }
+    }
+  }
+  return [...out.values()].sort((a, b) => a.label.localeCompare(b.label));
+}
+
+/** Create a new app folder from a base app's data, with a starter program. */
+export async function createApp(name: string, base: AppBase): Promise<boolean> {
+  if (!isValidAppName(name)) {
+    setStatus(`"${name}" is not a valid app name`, 'error');
+    return false;
+  }
+  const ws = await ensureWorkspace();
+  if (await ws.exists(appDirName(name))) {
+    setStatus(`${appDirName(name)} already exists`, 'error');
+    return false;
+  }
+  const parts = {
+    bag: base.bag,
+    note: encodeAppText(''),
+    program: encodeAppText(newAppProgram(name, base.base)),
+    files: [] as { name: string; data: Uint8Array }[],
+  };
+  for (const e of appToFolder(name, parts)) {
+    await ws.writeBytes(e.path, e.data);
+    const t = await ws.stat(e.path);
+    if (t !== null) known.set(e.path, t);
+  }
+  await refreshFiles();
+  openFile(`${appDirName(name)}/${name}.hpappprgm`);
+  setStatus(`Created app ${name} based on ${base.base}. Send it to put it on the calculator (experimental)`, 'ok');
+  return true;
+}
+
+// ------------------------------------------- objects sent by the calculator
+
+let incoming: PrimeFile[] = [];
+let incomingTimer: ReturnType<typeof setTimeout> | undefined;
+
+/** Collect objects from the calculator's Send key; ask once they stop arriving. */
+function queueIncoming(f: PrimeFile): void {
+  incoming.push(f);
+  clearTimeout(incomingTimer);
+  incomingTimer = setTimeout(() => void promptIncoming(), 1500);
+}
+
+async function promptIncoming(): Promise<void> {
+  const batch = incoming;
+  incoming = [];
+  const useful = batch.filter((f) => [ObjType.APP, ObjType.PROGRAM, ObjType.NOTE].includes(f.type as 2 | 5 | 6));
+  const describe = (f: PrimeFile) =>
+    f.type === ObjType.APP ? `app ${appDisplayName(f.name)}` : f.type === ObjType.PROGRAM ? `program ${f.name}` : `note ${f.name}`;
+  const skipped = batch.length - useful.length;
+  if (!useful.length) {
+    setStatus(`The calculator sent ${batch.length} object(s) this app can't store (lists, variables, …)`, 'error');
+    return;
+  }
+  const list = useful.map((f) => `• ${describe(f)}`).join('\n');
+  if (!confirm(`The calculator sent:\n${list}${skipped ? `\n(+ ${skipped} other object(s), skipped)` : ''}\n\nSave to the workspace?`)) {
+    setStatus('Ignored what the calculator sent');
+    return;
+  }
+  let saved = 0;
+  for (const f of useful) {
+    try {
+      if (f.type === ObjType.APP) {
+        const a = calcAppFrom(f);
+        if (!a) continue;
+        app.calcApps = [...app.calcApps.filter((x) => x.name !== a.name), a];
+        if (await saveAppToWorkspace(a.name, a.payload)) saved++;
+      } else {
+        const kind: TextKind = f.type === ObjType.PROGRAM ? 'program' : 'note';
+        const { text, formatted } = decodeText(kind, f.data);
+        upsertCalc({ kind, name: f.name, text, formatted });
+        await importObject(kind, f.name, text);
+        saved++;
+      }
+    } catch (e) {
+      setStatus(`Couldn't save ${describe(f)}: ${(e as Error).message}`, 'error');
+      return;
+    }
+  }
+  setStatus(`Saved ${saved} of ${useful.length} object(s) from the calculator`, saved ? 'ok' : 'error');
 }
 
 // ---------------------------------------------------------- workspace
@@ -746,6 +1156,12 @@ export async function refreshFiles(): Promise<void> {
   app.files = workspace ? await workspace.list() : [];
 }
 
+/** The editor couldn't open a file (e.g. a built-in app's compiled program): say so and close its tab. */
+export function reportOpenError(file: string, e: unknown): void {
+  setStatus(e instanceof BinaryFileError ? e.message : `Can't open ${file}: ${(e as Error).message}`, 'error');
+  dropTab(file);
+}
+
 export async function readFile(file: string): Promise<string> {
   const ws = await ensureWorkspace();
   const [text, t] = await Promise.all([ws.read(file), ws.stat(file)]);
@@ -771,6 +1187,10 @@ export async function newFile(kind: TextKind = 'program'): Promise<void> {
 }
 
 export async function deleteFile(file: string): Promise<void> {
+  const appName = appOfPath(file);
+  if (appName && isAppOwnFile(appName, file)) {
+    return setStatus(`${file} is part of the app; delete the whole app instead`, 'error');
+  }
   if (!confirm(`Delete ${file} from ${app.workspaceLabel}? (The calculator copy is not affected.)`)) return;
   await (await ensureWorkspace()).remove(file);
   dropTab(file);
@@ -782,6 +1202,11 @@ export async function deleteFile(file: string): Promise<void> {
 
 /** Rename a workspace file (the extension, and so the kind, stays the same). */
 export async function renameFile(file: string): Promise<void> {
+  const appName = appOfPath(file);
+  if (appName) {
+    if (isAppOwnFile(appName, file)) return renameApp(appName);
+    return renameAppExtraFile(appName, file);
+  }
   const kind = kindFromFile(file);
   const ext = file.slice(programNameFromFile(file).length);
   const oldName = programNameFromFile(file);

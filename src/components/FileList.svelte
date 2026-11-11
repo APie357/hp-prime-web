@@ -1,16 +1,73 @@
 <script lang="ts">
-  import { folderAccessSupported, kindFromFile } from '../lib/files/workspace';
+  import { folderAccessSupported } from '../lib/files/workspace';
+  import { fileType, isEditable } from '../lib/files/kinds';
+  import { appDirName, appDisplayName, isSystemApp } from '../lib/files/app';
   import {
+    addAppFile,
     app,
+    deleteAppFolder,
     deleteFile,
     newFile,
     openFile,
+    renameApp,
     renameFile,
     openBrowserStorage,
     openFolder,
     refreshFiles,
     reopenFolder,
+    sendAppFolder,
+    workspaceApps,
   } from '../lib/state.svelte';
+
+  const ICONS: Record<string, string> = {
+    program: '▸',
+    note: '✎',
+    'app-program': '▸',
+    'app-note': '✎',
+    python: '🐍',
+    text: '≡',
+    binary: '◆',
+  };
+
+  const rootFiles = $derived(app.files.filter((f) => !f.includes('/')));
+  const apps = $derived(workspaceApps(app.files));
+  /** Expanded app folders (the one holding the current file is always open). */
+  let expanded = $state<string[]>([]);
+  const isOpen = (name: string) => expanded.includes(name) || !!app.current?.startsWith(appDirName(name) + '/');
+  const toggle = (name: string) =>
+    (expanded = expanded.includes(name) ? expanded.filter((n) => n !== name) : [...expanded, name]);
+
+  function innerFiles(name: string): string[] {
+    const dir = appDirName(name) + '/';
+    const own = [`${name}.hpappprgm`, `${name}.hpappnote`, `${name}.hpapp`].map((x) => (dir + x).toLowerCase());
+    const files = app.files.filter((f) => f.startsWith(dir));
+    // App program, note and data first, then the extra files.
+    return [
+      ...own.map((o) => files.find((f) => f.toLowerCase() === o)).filter((f): f is string => !!f),
+      ...files.filter((f) => !own.includes(f.toLowerCase())),
+    ];
+  }
+
+  function label(path: string, appName: string): string {
+    const inner = path.slice(appDirName(appName).length + 1);
+    switch (inner.toLowerCase()) {
+      case `${appName}.hpappprgm`.toLowerCase():
+        return 'Program';
+      case `${appName}.hpappnote`.toLowerCase():
+        return 'Info note';
+      case `${appName}.hpapp`.toLowerCase():
+        return 'App data';
+      default:
+        return inner;
+    }
+  }
+
+  function onKey(e: KeyboardEvent, f: string) {
+    if (e.key === 'F2') {
+      e.preventDefault();
+      renameFile(f);
+    }
+  }
 </script>
 
 <section class="panel">
@@ -19,6 +76,7 @@
     <div class="actions">
       <button title="New program" onclick={() => newFile('program')}>＋ Prgm</button>
       <button title="New note" onclick={() => newFile('note')}>＋ Note</button>
+      <button title="New app (based on a calculator app; experimental)" onclick={() => (app.newAppOpen = true)}>＋ App</button>
       <button title="Refresh" onclick={refreshFiles}>⟳</button>
     </div>
   </header>
@@ -42,27 +100,58 @@
   </div>
 
   <ul>
-    {#each app.files as f (f)}
-      <li class:active={app.current === f}>
+    {#each apps as name (name)}
+      <li class="app-row" class:open={isOpen(name)}>
+        <button class="file" onclick={() => toggle(name)} aria-expanded={isOpen(name)} title={appDirName(name)}>
+          <span class="icon chev">{isOpen(name) ? '▾' : '▸'}</span><span class="app-icon">▣</span>{appDisplayName(name)}
+          {#if isSystemApp(name)}<span class="tag">built-in</span>{/if}
+        </button>
         <button
-          class="file"
-          onclick={() => openFile(f)}
-          onkeydown={(e) => {
-            if (e.key === 'F2') {
-              e.preventDefault();
-              renameFile(f);
-            }
-          }}
-          title="{f} (F2 to rename)"
+          class="act"
+          title="Send app to the calculator"
+          aria-label="Send app {appDisplayName(name)}"
+          disabled={!app.connected || !!app.busy}
+          onclick={() => sendAppFolder(name)}>⇪</button
         >
-          <span class="icon" title={kindFromFile(f)}>{kindFromFile(f) === 'note' ? '✎' : '▸'}</span>{f}{#if app.dirty.includes(f)}<span class="dot">●</span>{/if}
+        <button class="act" title="Add a file (e.g. a Python module)" aria-label="Add a file to {appDisplayName(name)}" onclick={() => addAppFile(name)}>＋</button>
+        {#if !isSystemApp(name)}
+          <button class="act" title="Rename app" aria-label="Rename app {appDisplayName(name)}" onclick={() => renameApp(name)}>✏</button>
+        {/if}
+        <button class="act" title="Delete app folder" aria-label="Delete app {appDisplayName(name)}" onclick={() => deleteAppFolder(name)}>✕</button>
+      </li>
+      {#if isOpen(name)}
+        {#each innerFiles(name) as f (f)}
+          {@const editable = isEditable(f)}
+          <li class="child" class:active={app.current === f}>
+            <button
+              class="file"
+              disabled={!editable}
+              onclick={() => openFile(f)}
+              onkeydown={(e) => onKey(e, f)}
+              title={editable ? `${f} (F2 to rename)` : `${f} (binary; sent as-is)`}
+            >
+              <span class="icon">{ICONS[fileType(f)]}</span>{label(f, name)}{#if app.dirty.includes(f)}<span class="dot">●</span>{/if}
+            </button>
+            {#if label(f, name) === f.slice(appDirName(name).length + 1)}
+              <button class="act" title="Rename (F2)" aria-label="Rename {f}" onclick={() => renameFile(f)}>✏</button>
+              <button class="act" title="Delete" aria-label="Delete {f}" onclick={() => deleteFile(f)}>✕</button>
+            {/if}
+          </li>
+        {/each}
+      {/if}
+    {/each}
+    {#each rootFiles as f (f)}
+      <li class:active={app.current === f}>
+        <button class="file" onclick={() => openFile(f)} onkeydown={(e) => onKey(e, f)} title="{f} (F2 to rename)">
+          <span class="icon" title={fileType(f)}>{ICONS[fileType(f)]}</span>{f}{#if app.dirty.includes(f)}<span class="dot">●</span>{/if}
         </button>
         <button class="act" title="Rename (F2)" aria-label="Rename {f}" onclick={() => renameFile(f)}>✏</button>
         <button class="act" title="Delete" aria-label="Delete {f}" onclick={() => deleteFile(f)}>✕</button>
       </li>
-    {:else}
-      <li class="none">No files yet</li>
     {/each}
+    {#if !app.files.length}
+      <li class="none">No files yet</li>
+    {/if}
   </ul>
 </section>
 
@@ -135,6 +224,26 @@
     display: inline-block;
     width: 14px;
     color: var(--muted);
+  }
+  .file:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+  .child .file {
+    padding-left: 30px;
+  }
+  .app-icon {
+    margin-right: 5px;
+    color: var(--teal);
+  }
+  .tag {
+    margin-left: 6px;
+    font-size: 10px;
+    color: var(--muted);
+    font-family: system-ui, sans-serif;
+  }
+  .chev {
+    width: 12px;
   }
   .dot {
     color: var(--accent);

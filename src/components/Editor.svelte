@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { monaco, monacoTheme, PPL } from '../lib/monaco';
   import { resolvedTheme } from '../lib/ui.svelte';
-  import { kindFromFile } from '../lib/files/workspace';
+  import { fileType, isProse, languageFor } from '../lib/files/kinds';
   import {
     app,
     closeFile,
@@ -12,6 +12,7 @@
     openFile,
     readFile,
     renameFile,
+    reportOpenError,
     saveFile,
     sendAndRun,
     sendCurrent,
@@ -26,7 +27,7 @@
   function modelFor(file: string, text: string): monaco.editor.ITextModel {
     let m = models.get(file);
     if (m) return m;
-    const language = kindFromFile(file) === 'note' ? 'plaintext' : PPL;
+    const language = languageFor(file) === 'hpppl' ? PPL : languageFor(file);
     m = monaco.editor.createModel(text, language, monaco.Uri.file('/' + file));
     m.onDidChangeContent(() => {
       if (loading) return;
@@ -81,6 +82,16 @@
     monaco.editor.setTheme(monacoTheme(resolvedTheme()));
   });
 
+  const ICONS: Record<string, string> = {
+    program: '▸',
+    note: '✎',
+    'app-program': '▣',
+    'app-note': '✎',
+    python: '🐍',
+    text: '≡',
+    binary: '◆',
+  };
+
   // Tab drag-and-drop reordering.
   let dragged: string | null = null;
 
@@ -131,16 +142,19 @@
       return;
     }
     // Notes are prose: wrap long lines.
-    editor.updateOptions({ wordWrap: kindFromFile(file) === 'note' ? 'on' : 'off' });
+    editor.updateOptions({ wordWrap: isProse(file) ? 'on' : 'off' });
     const existing = models.get(file);
     if (existing) {
       show(file, existing);
       return;
     }
-    readFile(file).then((text) => {
-      if (app.current !== file) return;
-      show(file, modelFor(file, text));
-    });
+    readFile(file).then(
+      (text) => {
+        if (app.current !== file) return;
+        show(file, modelFor(file, text));
+      },
+      (e) => reportOpenError(file, e),
+    );
   });
 </script>
 
@@ -182,8 +196,8 @@
         }}
         ondragend={() => (dragged = null)}
       >
-        <span class="icon">{kindFromFile(f) === 'note' ? '✎' : '▸'}</span>
-        <span class="name">{f}</span>
+        <span class="icon">{ICONS[fileType(f)]}</span>
+        <span class="name">{f.replace(/^.*\//, '')}</span>
         <button
           class="close"
           class:dirty={app.dirty.includes(f)}

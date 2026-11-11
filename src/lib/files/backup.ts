@@ -4,15 +4,14 @@
  *   raw/<type>/<name>.bin    every object's body exactly as received (F7 data after the name)
  *   programs/<name>.hpppl    programs as readable text (same format as the workspace)
  *   notes/<name>.note        notes as plain text (rich formatting only in raw/)
+ *   apps/<name>.hpappdir/    apps in the workspace's folder layout (see app.ts)
  */
 import { strToU8, unzipSync, zipSync, type Zippable } from 'fflate';
 import { OBJ_TYPE_NAMES, ObjType } from '../hid/commands';
 import type { PrimeFile } from '../hid/parsers';
 import { decodeText } from '../hid/session';
-
-// Same extensions as workspace.ts (not imported: it opens IndexedDB on load).
-const SOURCE_EXT = '.hpppl';
-const NOTE_EXT = '.note';
+import { appToFolder, parseAppPayload } from './app';
+import { NOTE_EXT, SOURCE_EXT } from './kinds';
 
 export interface BackupEntry {
   type: number;
@@ -20,6 +19,7 @@ export interface BackupEntry {
   name: string;
   bytes: number;
   raw: string;
+  /** Readable copy: a file, or for apps a folder (ending in `/`). */
   text?: string;
 }
 
@@ -65,6 +65,15 @@ export function buildBackupZip(files: PrimeFile[], device: BackupManifest['devic
       const text = unique(kind === 'program' ? `programs/${base}${SOURCE_EXT}` : `notes/${base}${NOTE_EXT}`);
       put(text, strToU8(decodeText(kind, f.data).text));
       entry.text = text;
+    } else if (f.type === ObjType.APP) {
+      try {
+        for (const e of appToFolder(base, parseAppPayload(f.data))) {
+          put(unique(`apps/${e.path}`), e.data);
+        }
+        entry.text = `apps/${base}.hpappdir/`;
+      } catch {
+        /* unrecognised app data: raw/ still has it */
+      }
     }
     objects.push(entry);
   }

@@ -142,7 +142,7 @@ F8 01 00 00 00 14 06 10 9D 91  4E 00 45 00 57 00 50 00 52 00 4F 00 47 00  00 00
 | Type | Object | Notes |
 |---|---|---|
 | `00` | Settings | e.g. `calc.hpsettings`, `cas.hpsettings`, `calc.hpvars` in a backup (PrimeDev) |
-| `02` | App | App directory |
+| `02` | **App** | §6.3. Verified (G2) for reading |
 | `03` | List | |
 | `04` | Matrix | |
 | `05` | **Note** | §6.2. Verified (G2) |
@@ -153,7 +153,7 @@ F8 01 00 00 00 14 06 10 9D 91  4E 00 45 00 57 00 50 00 52 00 4F 00 47 00  00 00
 | `0A` | Real | |
 | `0B` | Exam-mode configuration | |
 
-Types `05` and `06` are verified on the G2. The rest come from PrimeDev and hpemu and show up in `F9` backups. Their body formats are not documented here, and this project stores them as raw bytes.
+Types `02`, `05` and `06` are verified on the G2. The rest come from PrimeDev and hpemu and show up in `F9` backups. Their body formats are not documented here, and this project stores them as raw bytes.
 
 ### 5.2 `F7`: send an object (host → calculator)
 
@@ -209,11 +209,35 @@ EB 01 00 00 00 12 06 0E EF A7  4E 00 45 00 57 00 50 00 52 00 4F 00 47 00
 - Note names are freer than program names: spaces are allowed.
 - The Connectivity Kit sometimes writes 2-byte placeholder notes with junk content. Treat a body under 4 bytes as empty.
 
-### 6.3 Names
+### 6.3 Apps (type `02`)
+
+**Verified (G2)** for reading: all 19 apps in a G2 backup (the 18 built-ins plus a custom Python app) parse and rebuild byte for byte with this layout. Sending apps hasn't been tried on hardware yet.
+
+The body is a series of sections, each `u32 big-endian length | bytes`:
+
+| # | Section | Contents |
+|---|---|---|
+| 0 | App data (the Connectivity Kit's `.hpapp`) | A tagged-object "variable bag": `7C 61 8A B2 FF FF FF FF …`, then little-endian records `u32 len \| u32 type \| payload`. **Byte 20 = base app** (table below). It does **not** contain the app's name. |
+| 1 | Info note | Like a note (§6.2): UTF-16LE + NUL; `00 00` when empty |
+| 2 | App program | UTF-16LE + NUL. The built-in Function and Triangle Solver apps carry a 36-byte binary stub here instead (it contains `Main`). |
+| 3… | Extra files | File name (UTF-16LE) + `00 00` + the file's bytes, e.g. `dynatris.py` (plain UTF-8 Python, CRLF), `icon.png`, other data files |
+
+- **Names:** built-in apps are named with a leading `&` (`&Function`, `&Statistics 1Var`). Custom apps have plain names (`Dynatris`).
+- **Base app (bag byte 20)**, per prime_connection_kit: 0 Function, 1 Solve, 2 Statistics 1Var, 3 Statistics 2Var, 4 Inference, 5 Parametric, 6 Polar, 7 Sequence, 8 Finance, 9 Linear Solver, 10 Triangle Solver, 14 Data Streamer, 15 Geometry, 16 Spreadsheet, 17 Advanced Graphing, 18 Graph 3D, 19 Explorer, 20 None, 21 Python. Matches all 18 built-ins on the G2.
+- **Python apps:** the app program holds `#PYTHON name()` … `#END` blocks (e.g. `START()`, `RESET()`). Modules travel as extra files in plain text. A compressed-looking `.bin` file inside Dynatris is that app's own format: its `.py` decompresses it. It isn't something the calculator does.
+- **No separate `07`/`08` objects** appeared in a G2 backup: the note and program travel inside the type-02 body. (hplp marks `07`/`08` as tentative; pck sends them separately.)
+- **New apps:** since the bag has no name, a new app is a base app's bag sent under a new name with its own program. **Unverified:** whether the calculator accepts an app created this way.
+- **Fetching one app** with `F8` type `02` is untested. Listing works through the backup (§7).
+
+### 6.4 Names
 
 Program names must be valid identifiers: a letter or `_`, then letters, digits or `_`. This project also caps them at 64 characters. The calculator's own limits haven't been tested. In any message, a name can be at most 255 bytes (127 UTF-16 characters), because `nameLen` is one byte.
 
 ---
+
+### 6.5 Objects the calculator sends by itself
+
+**Verified (G2).** The calculator's **Send** softkey (Apps screen, Program Catalog, Notes catalog) pushes the selected object to the host as an ordinary `F7` message (§5), without any request and without a closing frame. The host has to be reading while idle, as for chat (§9.2). An `F7` that arrives while the host waits for some other reply belongs to this too. This project collects whatever arrives within 1.5 s and asks before saving it.
 
 ## 7. `F9`: backup (read everything)
 
@@ -419,7 +443,9 @@ Before each request, the host discards any input reports still queued, so a late
 - The meaning of `F3`–`F6` and `FD`, and of the second header byte (`01` vs `03`).
 - Whether output reports ever need padding to 1024 bytes.
 - The maximum program size the G2 accepts.
-- Body formats for types other than programs and notes. Could restoring raw backup objects with `F7` be safe?
+- Body formats for types other than programs, notes and apps. Could restoring raw backup objects with `F7` be safe?
+- Whether the calculator accepts an app sent with `F7` (and a new app made from another app's bag), and whether `F8` fetches a single app.
+- What the 36-byte program stub in the built-in Function and Triangle Solver apps is.
 - The fixed `00 00 54 1E` bytes in `E7`.
 - The full `FA` reply layout on the G2.
 - Whether the G1 (`0x1541`, 64-byte reports) behaves the same for everything above.

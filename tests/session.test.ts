@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { PrimeSession } from '../src/lib/hid/session';
 import { MockPrime } from './mockPrime';
+import { utf16le } from '../src/lib/hid/bytes';
 
 const SRC = 'EXPORT WEBTEST()\r\nBEGIN\r\n  PRINT("hi");\r\nEND;';
 
@@ -128,6 +129,36 @@ describe('PrimeSession', () => {
     calc.chatBeforeReply = 'x²+1';
     expect(await s.ready()).toBe(true);
     expect(got).toEqual(['x²+1']);
+  });
+  it('passes on objects the calculator sends with its Send key', async () => {
+    const { s, calc } = session();
+    const got: string[] = [];
+    s.onObject = (f) => got.push(`${f.type}:${f.name}:${f.data.length}`);
+    s.listen();
+    calc.sendObject(2, 'Dynatris', Uint8Array.of(1, 2, 3));
+    calc.sendObject(6, 'PROG', utf16le('x'));
+    await until(() => got.length === 2);
+    expect(got).toEqual(['2:Dynatris:3', '6:PROG:2']);
+    expect(await s.ready()).toBe(true);
+    s.listen(false);
+  });
+
+  it('treats an object arriving ahead of a reply as sent by the calculator', async () => {
+    const { s, calc } = session();
+    const got: string[] = [];
+    s.onObject = (f) => got.push(f.name);
+    calc.objectBeforeReply = [5, 'Todo', utf16le('hi')];
+    expect(await s.ready()).toBe(true);
+    expect(got).toEqual(['Todo']);
+  });
+
+  it('sends an app and verifies the read-back', async () => {
+    const { s, calc } = session();
+    const payload = Uint8Array.of(0, 0, 0, 4, 0x7c, 0x61, 0x8a, 0xb2, 0, 0, 0, 2, 0, 0, 0, 0, 0, 2, 0, 0);
+    const r = await s.sendApp('Game', payload);
+    expect(r).toMatchObject({ refused: false, verified: 'match' });
+    expect(Array.from(calc.objects.get('2:Game')!)).toEqual(Array.from(payload));
+    expect(Array.from((await s.readApp('Game'))!.data)).toEqual(Array.from(payload));
   });
 });
 

@@ -7,11 +7,18 @@
   import Console from './components/Console.svelte';
   import Splitter from './components/Splitter.svelte';
   import DiffView from './components/DiffView.svelte';
+  import NewAppDialog from './components/NewAppDialog.svelte';
+  import { appDisplayName, appOfPath } from './lib/files/app';
+  import { fileType } from './lib/files/kinds';
   import { cycleTheme, resetSize, resolvedTheme, saveLayout, setSize, ui, type Layout } from './lib/ui.svelte';
   import { app, autoConnect, connect, disconnect, initWorkspace, sendAndRun, sendCurrent, toggleConsole } from './lib/state.svelte';
-  import { kindFromFile, programNameFromFile } from './lib/files/workspace';
+  import { programNameFromFile } from './lib/files/workspace';
 
-  const isProgram = $derived(!!app.current && kindFromFile(app.current) === 'program');
+  const isProgram = $derived(!!app.current && fileType(app.current) === 'program');
+  const currentApp = $derived(app.current ? appOfPath(app.current) : null);
+  const sendLabel = $derived(
+    !app.current ? '' : currentApp ? `app ${appDisplayName(currentApp)}` : programNameFromFile(app.current),
+  );
 
   // Theme: data-theme on <html> only when chosen explicitly; Auto follows the system via CSS.
   $effect(() => {
@@ -73,7 +80,7 @@
       disabled={!app.connected || !app.current || !!app.busy}
       title="Send the open program to the calculator (Ctrl+Enter)"
     >
-      Send {app.current ? programNameFromFile(app.current) : ''} to calculator
+      Send {sendLabel} to calculator
     </button>
     <button
       onclick={sendAndRun}
@@ -105,6 +112,8 @@
       <Console />
     </div>
   {/if}
+
+  {#if app.newAppOpen}<NewAppDialog />{/if}
 
   {#if app.diff}
     {#key app.diff}<DiffView req={app.diff} />{/key}
