@@ -96,14 +96,14 @@
   <header>
     <h2>Files</h2>
     <div class="actions">
-      <button title="New program, note or app" onclick={() => (app.newFileOpen = true)}><Icon name="add" size={15} />New</button>
+      <button class="tool" title="New program, note or app" onclick={() => (app.newFileOpen = true)}><Icon name="add" size={15} />New</button>
       <button class="only-icon" title="Refresh" aria-label="Refresh" onclick={refreshFiles}><Icon name="refresh" size={16} /></button>
     </div>
   </header>
 
   <div class="ws">
     {#if folderAccessSupported()}
-      <button class="ws-open" title="Open a local folder as the workspace" onclick={openFolder}><Icon name="folder" size={15} />Open</button>
+      <button class="tool" title="Open a local folder as the workspace" onclick={openFolder}><Icon name="folder" size={15} />Open</button>
     {/if}
     {#if app.needsPermission}
       <button class="wide" onclick={reopenFolder}>Reopen “{app.workspaceLabel}”</button>
@@ -115,7 +115,7 @@
     {/if}
     {#if app.workspaceKind !== 'browser'}
       <button class="only-icon" title="Use browser storage" aria-label="Use browser storage" onclick={openBrowserStorage}
-        ><Icon name="database" size={15} /></button
+        ><Icon name="database" size={16} /></button
       >
     {/if}
   </div>
@@ -193,23 +193,34 @@
 
 <style>
   .ws {
-    padding: 6px 8px;
+    padding: 6px 10px;
     border-bottom: 1px solid var(--border);
     display: flex;
     align-items: center;
     gap: 8px;
   }
-  .ws-open,
-  .ws .only-icon {
+  /* Header and workspace-row buttons share one size so their edges line up. */
+  .tool,
+  .only-icon {
     flex: none;
+    box-sizing: border-box;
+    height: 24px;
     display: inline-flex;
     align-items: center;
-    gap: 3px;
+    justify-content: center;
     font-size: 12px;
+  }
+  .panel header .actions .tool {
+    gap: 3px;
+    padding: 0 8px 0 5px;
+  }
+  .panel header .actions .only-icon,
+  .ws .only-icon {
+    width: 24px;
+    padding: 0;
   }
   .ws .only-icon {
     margin-left: auto;
-    padding: 2px 4px;
   }
   .ws-label {
     min-width: 0;
@@ -224,15 +235,6 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-  .actions button {
-    display: inline-flex;
-    align-items: center;
-    gap: 1px;
-    padding-left: 4px;
-  }
-  .actions .only-icon {
-    padding: 2px 4px;
   }
   .wide {
     font-size: 12px;
