@@ -24,6 +24,8 @@ The goal is a browser IDE for writing HP Prime PPL ("HP Basic") programs and sen
 - Commit messages end with the Co-Authored-By line given by the harness.
 
 ## Protocol findings (from hplp + modern reverse-engineering)
+The full write-up, marked by how sure each fact is, is **`docs/PROTOCOL.md`**. Keep it in step with any new finding. The notes below are the working summary.
+
 Sources: `debrouxl/hplp` (`libhpcalcs/src/prime_vpkt.c`, `prime_cmd.c`, `hplibs.h`); `56phil/prime_connection_kit` (MIT; **verified on a G2, firmware V2.060.650**); `golba98/hp-prime-emulator` (MIT; G1 2.2.15157 docs); `BeatSkip/PrimeDev` (a Blazor WebHID app for the G2, with the V2 framing).
 
 - **USB IDs:** VID `0x03F0`; PIDs `0x0441` (old G1), `0x1541` (G1 ≥ fw 8151), `0x2441` (G2). Vendor HID, unnumbered reports (report ID 0).
@@ -41,6 +43,7 @@ Sources: `debrouxl/hplp` (`libhpcalcs/src/prime_vpkt.c`, `prime_cmd.c`, `hplibs.
 ## Architecture / file layout
 ```
 AGENTS.md                      plan + protocol notes + conventions (kept current)
+docs/PROTOCOL.md               HP Prime G2 USB protocol reference (verified vs reference vs unknown)
 package.json, vite.config.ts, tsconfig.json, svelte.config.js
 udev/60-hp-prime.rules         hidraw access on Linux (TAG+="uaccess" for 03f0:0441/1541/2441)
 THIRD_PARTY.md                 attribution (hplp GPL ref-only, pck/hpemu MIT, PrimeDev keycodes)
