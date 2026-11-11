@@ -196,8 +196,11 @@
     align-items: center;
     gap: 5px;
   }
-  /* The play triangle sits right of center in its box; pull it left so the padding looks even. */
-  .run :global(svg) {
+  /* Material icons have empty space on their left; pull a leading icon left so the padding looks even. */
+  .toolbar button:not(.theme) > :global(svg:first-child) {
+    margin-left: -4px;
+  }
+  .toolbar .run > :global(svg:first-child) {
     margin-left: -5px;
   }
   .theme {
