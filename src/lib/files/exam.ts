@@ -8,12 +8,15 @@
  * Matrices, Notes and Programs, the Math menu down to single commands, …).
  *
  * - Bytes 0–63: the name, UTF-16LE, NUL-padded (clear in the sample: "IB Exam Mode").
- * - Bytes 64–1151: settings and the disabled-feature bits. Not mapped yet.
- * - Bytes 1152–1155: `78 00 07 00` in the sample; maybe a timeout of 120 minutes and flags.
+ * - Bytes 64–1051: settings and the disabled-feature bits. Not mapped yet.
+ * - Bytes 1052–1151: password block. It changes with the password (and is filled even for a
+ *   blank one) through a salted or keyed hash we can't reproduce, so it's kept as-is.
+ * - Bytes 1152–1153: timeout in minutes, u16 LE (15 → `0F 00` and 120 → `78 00`).
+ * - Bytes 1154–1155: option flags, u16 LE. Not mapped yet (`C1 01` and `07 00` seen).
  *
- * So the editor shows the name and the raw bits (with a compare view for mapping them), and
- * keeps every byte it doesn't understand as it was. Whether the calculator's type-0B object body
- * is byte-for-byte the same as the `.hpexammode` file is also unconfirmed.
+ * Configurations read from a G2 (2026-11-11) have the same 1156-byte layout as the
+ * Connectivity Kit file. The editor shows the name and timeout, plus the raw bits with a compare
+ * view for mapping the rest, and keeps every byte it doesn't understand as it was.
  */
 
 export const EXAM_EXT = '.hpexammode';
@@ -57,6 +60,29 @@ export function isValidExamName(name: string): boolean {
 export function examFileFor(name: string): string {
   return name + EXAM_EXT;
 }
+
+/** Timeout field: u16 little-endian minutes. Verified against two configurations (15 and 120 min). */
+export const EXAM_TIMEOUT_OFFSET = 0x480;
+/** The calculator's longest timeout (HP Prime User Guide: "8 hours is the maximum period"). */
+export const EXAM_TIMEOUT_MAX = 8 * 60;
+
+/** Timeout in minutes, or null when the data is too short to hold it. */
+export function examTimeout(data: Uint8Array): number | null {
+  if (data.length < EXAM_TIMEOUT_OFFSET + 2) return null;
+  return data[EXAM_TIMEOUT_OFFSET] | (data[EXAM_TIMEOUT_OFFSET + 1] << 8);
+}
+
+export function withExamTimeout(data: Uint8Array, minutes: number): Uint8Array {
+  const out = data.slice();
+  if (out.length < EXAM_TIMEOUT_OFFSET + 2) return out;
+  const m = Math.max(1, Math.min(EXAM_TIMEOUT_MAX, Math.round(minutes)));
+  out[EXAM_TIMEOUT_OFFSET] = m & 0xff;
+  out[EXAM_TIMEOUT_OFFSET + 1] = m >> 8;
+  return out;
+}
+
+/** Password block (salted or keyed hash; changes with the password). Read-only. */
+export const EXAM_PASSWORD_RANGE = [0x41c, 0x480] as const;
 
 /** Byte `offset`, bit `bit` (0 = least significant). */
 export const getBit = (data: Uint8Array, offset: number, bit: number) => ((data[offset] ?? 0) >> bit) & 1;

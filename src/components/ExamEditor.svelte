@@ -5,8 +5,12 @@
     EXAM_FEATURES,
     EXAM_NAME_BYTES,
     EXAM_SAMPLE_SIZE,
+    EXAM_PASSWORD_RANGE,
+    EXAM_TIMEOUT_MAX,
     examName,
+    examTimeout,
     getBit,
+    withExamTimeout,
     setBit,
   } from '../lib/files/exam';
   import { fileType } from '../lib/files/kinds';
@@ -110,8 +114,10 @@
     <div class="note">
       <Icon name="science" size={16} />
       <div>
-        HP doesn't document this format. Only the name is decoded so far, so the options are shown as raw bits.
-        Everything else is kept byte for byte. Sending exam configurations hasn't been tried on hardware yet.
+        HP doesn't document this format. Only the name and timeout are decoded so far; the other options are shown
+        as raw bits, and everything else is kept byte for byte. The password can't be changed here: copy a
+        configuration that has the password you want from the calculator. If that password block also protects the
+        other settings, edits made here may be rejected. Sending exam configurations hasn't been tried on hardware yet.
       </div>
     </div>
     {#if data.length !== EXAM_SAMPLE_SIZE}
@@ -121,6 +127,28 @@
       <p class="warn">
         The name stored inside is “{storedName || '(empty)'}”. Sending sets it to “{fileName}”, the file name.
       </p>
+    {/if}
+
+    {#if examTimeout(data) !== null}
+      {@const t = examTimeout(data)!}
+      <section>
+        <h3>Timeout</h3>
+        <label class="field">
+          <input
+            type="number"
+            min="1"
+            max={EXAM_TIMEOUT_MAX}
+            value={t}
+            onchange={(e) => {
+              const v = e.currentTarget.valueAsNumber;
+              if (Number.isFinite(v)) void update(withExamTimeout(data!, v));
+              else e.currentTarget.value = String(t);
+            }}
+          />
+          minutes
+          <span class="muted">({Math.floor(t / 60)} h {t % 60} min; at most {EXAM_TIMEOUT_MAX / 60} h)</span>
+        </label>
+      </section>
     {/if}
 
     <section>
@@ -142,7 +170,7 @@
         </ul>
       {:else}
         <p class="muted">
-          None of the options (timeout, password, erase memory, Blink LED, disabled features) have been located in
+          None of the other options (angle, memory, Blink LED, security code, disabled features) have been located in
           the file yet. To find one, change just that option on the calculator, send the configuration here, and
           compare it with the previous copy below.
         </p>
@@ -195,8 +223,9 @@
                 class:zero={data[i] === 0}
                 class:diff={diffOffsets.has(i)}
                 class:sel={selected === i}
+                class:pw={i >= EXAM_PASSWORD_RANGE[0] && i < EXAM_PASSWORD_RANGE[1]}
                 role="gridcell"
-                title="0x{hex(i, 3)}"
+                title={i >= EXAM_PASSWORD_RANGE[0] && i < EXAM_PASSWORD_RANGE[1] ? `0x${hex(i, 3)} (password block)` : `0x${hex(i, 3)}`}
                 onclick={() => (selected = selected === i ? null : i)}>{hex(data[i])}</button
               >
             {/each}
@@ -275,6 +304,20 @@
     text-transform: uppercase;
     letter-spacing: 0.06em;
     color: var(--muted);
+  }
+  .field {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .field input {
+    width: 80px;
+    font: inherit;
+    color: var(--fg);
+    background: var(--input-bg);
+    border: 1px solid var(--input-border);
+    border-radius: 4px;
+    padding: 2px 6px;
   }
   .features {
     list-style: none;
@@ -355,6 +398,10 @@
   .byte.diff {
     background: color-mix(in srgb, var(--warn) 25%, transparent);
     opacity: 1;
+  }
+  .byte.pw {
+    font-style: italic;
+    color: var(--muted);
   }
   .byte.sel {
     border-color: var(--accent);

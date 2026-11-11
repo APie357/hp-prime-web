@@ -47,3 +47,18 @@ describe('exam configurations', () => {
     expect(fileType('Foo.note')).toBe('note');
   });
 });
+
+describe('exam timeout', () => {
+  it('reads and writes u16 LE minutes at 0x480', async () => {
+    const { examTimeout, withExamTimeout } = await import('../src/lib/files/exam');
+    const d = new Uint8Array(1156);
+    d[0x480] = 0x0f;
+    d[0x482] = 0xc1;
+    d[0x483] = 0x01;
+    expect(examTimeout(d)).toBe(15);
+    const e = withExamTimeout(d, 120);
+    expect([...e.subarray(0x480)]).toEqual([0x78, 0x00, 0xc1, 0x01]);
+    expect(examTimeout(withExamTimeout(d, 9999))).toBe(480);
+    expect(examTimeout(new Uint8Array(100))).toBeNull();
+  });
+});
