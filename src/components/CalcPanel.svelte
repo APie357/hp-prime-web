@@ -21,6 +21,7 @@
   import { ui } from '../lib/ui.svelte';
 
   let showInfo = $state(false);
+  let showBuiltIn = $state(false);
   let fetchName = $state('');
   let fetchKind = $state<TextKind | 'app'>('program');
   let chatText = $state('');
@@ -42,6 +43,8 @@
 
   const programs = $derived(app.calcObjects.filter((o) => o.kind === 'program'));
   const notes = $derived(app.calcObjects.filter((o) => o.kind === 'note'));
+  const customApps = $derived(app.calcApps.filter((a) => !isSystemApp(a.name)));
+  const builtInApps = $derived(app.calcApps.filter((a) => isSystemApp(a.name)));
   const notListed = $derived(app.busy?.startsWith('Reading calculator') ? 'Reading…' : 'Not listed yet (↻ above)');
 </script>
 
@@ -162,24 +165,40 @@
     {/if}
 
     <div class="lists">
+      {#snippet appRow(a: (typeof app.calcApps)[number])}
+        <li>
+          <span class="name" title={a.name}>{appDisplayName(a.name)}</span>
+          <span class="muted size" title="Based on">{isSystemApp(a.name) ? 'built-in' : a.base}</span>
+          <button onclick={() => openCalcApp(a.name)} title="Copy into the workspace and open">Open</button>
+          <button
+            class="danger"
+            onclick={() => deleteCalcApp(a.name)}
+            disabled={!!app.busy || isSystemApp(a.name)}
+            title={isSystemApp(a.name) ? 'Built-in apps can’t be deleted' : 'Delete from the calculator'}
+            aria-label="Delete app {a.name} from the calculator"><Icon name="delete" /></button
+          >
+        </li>
+      {/snippet}
       <h3 class="pad">Apps {#if app.calcListedAt}<span class="muted">({app.calcApps.length})</span>{/if}</h3>
       <ul>
-        {#each app.calcApps as a (a.name)}
-          <li>
-            <span class="name" title={a.name}>{appDisplayName(a.name)}</span>
-            <span class="muted size" title="Based on">{isSystemApp(a.name) ? 'built-in' : a.base}</span>
-            <button onclick={() => openCalcApp(a.name)} title="Copy into the workspace and open">Open</button>
-            <button
-              class="danger"
-              onclick={() => deleteCalcApp(a.name)}
-              disabled={!!app.busy || isSystemApp(a.name)}
-              title={isSystemApp(a.name) ? 'Built-in apps can’t be deleted' : 'Delete from the calculator'}
-              aria-label="Delete app {a.name} from the calculator"><Icon name="delete" /></button
-            >
-          </li>
+        {#each customApps as a (a.name)}
+          {@render appRow(a)}
         {:else}
-          <li class="muted">{app.calcListedAt ? 'No apps' : notListed}</li>
+          <li class="muted">{app.calcListedAt ? (builtInApps.length ? 'No apps of your own' : 'No apps') : notListed}</li>
         {/each}
+        {#if builtInApps.length}
+          <li class="group">
+            <button class="group-toggle" aria-expanded={showBuiltIn} onclick={() => (showBuiltIn = !showBuiltIn)}>
+              <Icon name={showBuiltIn ? 'keyboard_arrow_down' : 'keyboard_arrow_right'} size={16} />
+              Built-in apps <span class="muted">({builtInApps.length})</span>
+            </button>
+          </li>
+          {#if showBuiltIn}
+            {#each builtInApps as a (a.name)}
+              {@render appRow(a)}
+            {/each}
+          {/if}
+        {/if}
       </ul>
       {#each [{ title: 'Programs', items: programs, kind: 'program' }, { title: 'Notes', items: notes, kind: 'note' }] as group (group.kind)}
         <h3 class="pad">{group.title} {#if app.calcListedAt}<span class="muted">({group.items.length})</span>{/if}</h3>
@@ -359,6 +378,27 @@
   }
   h3 .link:hover {
     color: var(--fg);
+  }
+  li.group {
+    padding: 0 4px;
+  }
+  li.group .group-toggle {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 6px 3px 2px;
+    font-size: 13px;
+    text-align: left;
+    background: none;
+    border: none;
+    color: var(--fg);
+  }
+  li.group .group-toggle:hover {
+    background: var(--hover);
+  }
+  .group-toggle :global(svg) {
+    color: var(--muted);
   }
   li button.danger:hover:not(:disabled) {
     color: var(--err);
