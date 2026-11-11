@@ -143,6 +143,10 @@ code {
   padding: 8px;
   border-bottom: 1px solid var(--border);
 }
+/* Indent the title so its left gap matches the space above its capitals (~16px). */
+.panel > header h2 {
+  padding-left: 8px;
+}
 .panel > header .actions {
   display: flex;
   gap: 4px;
