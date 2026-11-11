@@ -171,6 +171,18 @@ export function folderToApp(name: string, entries: { name: string; data: Uint8Ar
   };
 }
 
+/**
+ * App data for a "None"-based app (base 20): an empty app with no built-in views, the usual base
+ * for Python apps. The calculator has no built-in `&None` app to copy, so this is the 124-byte bag
+ * of a None-based app from a G2 (only generic settings records; no name or code).
+ */
+const NONE_BAG_B64 =
+  'fGGKsv////8BAAEACAAAAIX/fwAUAAAACAAAAIX/vwABAAAACAAAAIX//wABAAAACAAAAIX/PwEBAAAACAAAAIX/fwEEAAAACAAAAIX/vwEBAAAADAAAAIX//wESAAAAEgAAABQAAAAeBgkFDAAAAAgAAAAFBkkAwHxjJg==';
+
+export function noneBag(): Uint8Array {
+  return Uint8Array.from(atob(NONE_BAG_B64), (c) => c.charCodeAt(0));
+}
+
 /** Starter program for a new app, by base app. */
 export function newAppProgram(name: string, base: string): string {
   if (base === 'Python') {

@@ -11,8 +11,7 @@
 
   async function load() {
     bases = await appBases();
-    const fn = bases.findIndex((b) => b.base === 'Function');
-    chosen = fn >= 0 ? fn : 0;
+    chosen = 0; // None: an empty app
   }
 
   onMount(() => {
@@ -60,8 +59,18 @@
         <span class="muted">Loading…</span>
       {:else if bases.length}
         <select bind:value={chosen}>
-          {#each bases as b, i (b.label)}<option value={i}>{b.label} — {b.base}</option>{/each}
+          {#each bases as b, i (b.label)}<option value={i}>{b.label === b.base || b.base === 'None' ? b.label : `${b.label} — ${b.base}`}</option>{/each}
         </select>
+        {#if bases.length === 1}
+          <span class="muted hint">
+            To base it on another app (Function, Python, …),
+            {#if app.connected}
+              <button type="button" class="link" onclick={list} disabled={!!app.busy}>list the calculator's apps</button>.
+            {:else}
+              connect the calculator and list its contents.
+            {/if}
+          </span>
+        {/if}
       {:else}
         <span class="muted">
           No apps known yet.
@@ -118,6 +127,17 @@
     border: 1px solid var(--input-border);
     border-radius: 4px;
     padding: 3px 4px;
+  }
+  .hint {
+    font-size: 12px;
+  }
+  .link {
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--accent);
+    font-size: 12px;
+    text-decoration: underline;
   }
   .err {
     color: var(--err);

@@ -9,6 +9,7 @@ import {
   decodeAppProgram,
   encodeAppText,
   folderToApp,
+  noneBag,
   parseAppPayload,
 } from '../src/lib/files/app';
 import { concat, utf16le } from '../src/lib/hid/bytes';
@@ -59,6 +60,14 @@ describe('app payload', () => {
     expect(buildAppPayload(folderToApp('My App', inner))).toEqual(buildAppPayload(withFile));
     expect(appOfPath('My App.hpappdir/notes.txt')).toBe('My App');
     expect(appOfPath('PROG.hpppl')).toBeNull();
+  });
+
+  it('has a built-in bag for None-based apps', () => {
+    const bag = noneBag();
+    expect(bag.length).toBe(124);
+    expect(baseAppOf(bag)).toBe('None');
+    const p = { bag, note: encodeAppText(''), program: encodeAppText('#PYTHON START()\n#END\n'), files: [] };
+    expect(parseAppPayload(buildAppPayload(p))).toEqual(p);
   });
 
   it('rejects data that is not an app', () => {

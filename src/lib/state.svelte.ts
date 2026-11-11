@@ -22,6 +22,7 @@ import {
   isSystemApp,
   isValidAppName,
   newAppProgram,
+  noneBag,
   parseAppPayload,
 } from './files/app';
 import { BinaryFileError, fileType, languageFor } from './files/kinds';
@@ -1017,7 +1018,9 @@ export async function appBases(): Promise<AppBase[]> {
       }
     }
   }
-  return [...out.values()].sort((a, b) => a.label.localeCompare(b.label));
+  const list = [...out.values()].sort((a, b) => a.label.localeCompare(b.label));
+  // Always offer an empty app; the calculator has no built-in "None" app to copy.
+  return [{ label: 'None — empty app', bag: noneBag(), base: 'None' }, ...list];
 }
 
 /** Create a new app folder from a base app's data, with a starter program. */
