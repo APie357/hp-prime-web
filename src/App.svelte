@@ -155,17 +155,18 @@
   .toolbar {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 4px; /* same button spacing as the panel headers */
     padding: 6px 8px; /* same side padding as the panel headers, so right-hand buttons line up */
     background: var(--panel);
     border-bottom: 1px solid var(--border);
   }
   h1 {
     font-size: 15px;
-    margin: 0 12px 0 0;
+    margin: 0 18px 0 0;
     font-weight: 600;
   }
   .dev {
+    margin-left: 6px;
     display: inline-flex;
     align-items: center;
     gap: 4px;
