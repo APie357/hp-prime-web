@@ -169,5 +169,7 @@ describe('chat', () => {
     expect(parseChat(msg)).toBe('123456789');
     // The Messages app's Help softkey: an empty message (just the NUL), stale buffer bytes after it.
     expect(parseChat(parseHex('F2 01 00 00 00 02 00 00 37 00 5E 00'))).toBe('');
+    const { clearHelp } = await import('../src/lib/hid/commands');
+    expect(hex(clearHelp())).toBe(hex(parseHex('F2 01 00 00 00 02 00 00')));
   });
 });

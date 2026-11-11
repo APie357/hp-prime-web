@@ -4,6 +4,7 @@
     app,
     backupToZip,
     clearChat,
+    clearHelp,
     deleteCalcObject,
     fetchObject,
     importObject,
@@ -90,6 +91,11 @@
     <div class="chat">
       <h3 class="pad">
         Chat
+        {#if app.helpPending}
+          <button class="help-btn" onclick={clearHelp} disabled={!!app.busy} title="Turn off the Help• flag on the calculator">
+            ✋ Clear help
+          </button>
+        {/if}
         {#if app.chat.length}<button class="link" onclick={clearChat} title="Clear the chat log">clear</button>{/if}
       </h3>
       {#if app.chat.length}
@@ -246,6 +252,15 @@
     font-family: inherit;
     font-style: italic;
     color: #dcdcaa;
+  }
+  h3 .help-btn {
+    margin-left: 8px;
+    font-size: 11px;
+    padding: 0 6px;
+    text-transform: none;
+    letter-spacing: 0;
+    color: #dcdcaa;
+    border-color: #dcdcaa;
   }
   h3 .link {
     float: right;

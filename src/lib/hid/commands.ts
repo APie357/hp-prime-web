@@ -107,6 +107,12 @@ export const sendKeys = (codes: number[]) => withLengthHeader(CMD.KEY, codes);
 /** F2 — chat message, UTF-16LE. */
 export const sendChat = (text: string) => withLengthHeader(CMD.CHAT, utf16le(text));
 
+/**
+ * F2 with an empty, NUL-terminated body: the same frame the Messages app's Help key sends.
+ * Sent to the calculator, it clears the Help• flag (verified on the G2).
+ */
+export const clearHelp = () => withLengthHeader(CMD.CHAT, [0, 0]);
+
 /** E7 — set the calculator clock. */
 export function setDateTime(d: Date): Uint8Array {
   return withLengthHeader(CMD.SET_TIME, [

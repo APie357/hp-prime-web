@@ -49,6 +49,8 @@ export const app = $state({
   showConsole: loadPref('showConsole', false),
   /** Chat with the calculator, oldest first. */
   chat: [] as ChatLine[],
+  /** The calculator pressed Help in Messages and it hasn't been cleared from here. */
+  helpPending: false,
 });
 
 export interface ChatLine {
@@ -177,6 +179,7 @@ async function openDevice(device: HIDDevice): Promise<void> {
   session.onChat = (text) => {
     if (!text) {
       addChat('in', '', true);
+      app.helpPending = true;
       return setStatus('The calculator asked for help (Help key in Messages)', 'ok');
     }
     addChat('in', text);
@@ -206,6 +209,7 @@ export async function disconnect(): Promise<void> {
   port = null;
   session = null;
   app.connected = false;
+  app.helpPending = false;
   app.info = null;
   app.deviceLabel = '';
   screen.live = false;
@@ -439,6 +443,15 @@ export async function sendChatMessage(text: string): Promise<boolean> {
     return true;
   });
   return ok ?? false;
+}
+
+/** Answer a help request: turns off the calculator's Help• flag. */
+export async function clearHelp(): Promise<void> {
+  await busy('Clearing help', async () => {
+    await needSession().clearHelp();
+    app.helpPending = false;
+    setStatus('Cleared the help request on the calculator', 'ok');
+  });
 }
 
 export function clearChat(): void {

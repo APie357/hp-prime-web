@@ -403,6 +403,11 @@ export class PrimeSession {
     return this.exclusive(() => this.sendMessage(C.sendChat(text)));
   }
 
+  /** Clear the Help• flag the Messages app's Help key sets. */
+  clearHelp(): Promise<void> {
+    return this.exclusive(() => this.sendMessage(C.clearHelp()));
+  }
+
   /**
    * E7 — set the clock. The calculator sends no reply, so follow up with a
    * ready check: a healthy link afterwards is the only signal available.

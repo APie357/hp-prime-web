@@ -22,19 +22,12 @@
     }
   }
 
-  /** Experiments, e.g. for clearing the calculator's Messages "Help•" flag (see TODO.md). */
+  /** Handy raw messages and experiments. */
   const presets: [string, string][] = [
     ['FF', 'ready check'],
-    ['F2 01 00 00 00 02 00 00', 'help-clear? empty chat (echo of Help)'],
-    ['F2 02 00 00 00 02 00 00', 'help-clear? empty chat, flag 02'],
-    ['F2 03 00 00 00 02 00 00', 'help-clear? empty chat, flag 03 (PrimeDev chat flag)'],
-    ['F2 01 00 00 00 00', 'help-clear? zero-length chat'],
-    ['F2 03 00 00 00 00', 'help-clear? zero-length chat, flag 03'],
-    ['F2 00 00 00 00 02 00 00', 'help-clear? empty chat, flag 00'],
-    ['F3 01 00 00 00 00', 'unknown opcode F3 (empty)'],
-    ['F4 01 00 00 00 00', 'unknown opcode F4 (empty)'],
-    ['F5 01 00 00 00 00', 'unknown opcode F5 (empty)'],
-    ['F6 01 00 00 00 00', 'unknown opcode F6 (empty)'],
+    ['F2 01 00 00 00 02 00 00', 'clear Help• flag (verified on G2)'],
+    ['F2 03 00 00 00 02 00 00', 'empty chat, flag 03 (PrimeDev chat flag; untested)'],
+    ['F3 01 00 00 00 00', 'unknown opcode F3 (empty; untested)'],
   ];
 
   const time = (t: number) => new Date(t).toLocaleTimeString([], { hour12: false });
