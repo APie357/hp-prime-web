@@ -18,6 +18,7 @@
     sendChatMessage,
     syncClock,
   } from '../lib/state.svelte';
+  import { ui } from '../lib/ui.svelte';
 
   let fetchName = $state('');
   let fetchKind = $state<TextKind | 'app'>('program');
@@ -40,11 +41,30 @@
 
   const programs = $derived(app.calcObjects.filter((o) => o.kind === 'program'));
   const notes = $derived(app.calcObjects.filter((o) => o.kind === 'note'));
+  const notListed = $derived(app.busy?.startsWith('Reading calculator') ? 'Reading…' : 'Not listed yet (↻ above)');
 </script>
 
 <section class="panel">
   <header>
     <h2>Calculator</h2>
+    {#if app.connected}
+      <div class="actions">
+        <button
+          class="icon"
+          onclick={refreshCalcContents}
+          disabled={!!app.busy}
+          title="List contents: read all apps, programs and notes (full backup, ~20 s)"
+          aria-label="List contents"><Icon name="refresh" size={16} /></button
+        >
+        <button
+          class="icon"
+          onclick={syncClock}
+          disabled={!!app.busy}
+          title="Sync clock: set the calculator's date and time to this computer's"
+          aria-label="Sync clock"><Icon name="schedule" size={16} /></button
+        >
+      </div>
+    {/if}
   </header>
 
   {#if !app.connected}
@@ -57,51 +77,48 @@
       {#if app.info?.firmware}<dt>Firmware</dt><dd>{app.info.firmware}</dd>{/if}
     </dl>
 
-    <div class="pad row">
-      <button onclick={refreshCalcContents} disabled={!!app.busy} title="Read all programs and notes (full backup, ~20 s)">
-        List contents
-      </button>
-      <button onclick={syncClock} disabled={!!app.busy} title="Set the calculator's date and time to this computer's">
-        Sync clock
-      </button>
-    </div>
-    <div class="pad row">
-      <button onclick={backupToZip} disabled={!!app.busy} title="Download everything on the calculator as a .zip (full backup, ~20 s)">
-        Backup to .zip
-      </button>
-      <button
-        onclick={() => restoreInput?.click()}
-        disabled={!!app.busy}
-        title="Send the programs and notes from a backup .zip back to the calculator"
+    {#if ui.backupRestore}
+      <div class="pad row">
+        <button onclick={backupToZip} disabled={!!app.busy} title="Download everything on the calculator as a .zip (full backup, ~20 s)">
+          Backup to .zip
+        </button>
+        <button
+          onclick={() => restoreInput?.click()}
+          disabled={!!app.busy}
+          title="Send the programs and notes from a backup .zip back to the calculator"
+        >
+          Restore…
+        </button>
+        <input bind:this={restoreInput} type="file" accept=".zip,application/zip" hidden onchange={onRestorePick} />
+      </div>
+    {/if}
+    {#if ui.fetchByName}
+      <form
+        class="pad row"
+        onsubmit={(e) => {
+          e.preventDefault();
+          if (fetchKind === 'app') fetchApp(fetchName);
+          else fetchObject(fetchKind, fetchName);
+        }}
       >
-        Restore…
-      </button>
-      <input bind:this={restoreInput} type="file" accept=".zip,application/zip" hidden onchange={onRestorePick} />
-    </div>
-    <form
-      class="pad row"
-      onsubmit={(e) => {
-        e.preventDefault();
-        if (fetchKind === 'app') fetchApp(fetchName);
-        else fetchObject(fetchKind, fetchName);
-      }}
-    >
-      <select bind:value={fetchKind} aria-label="Object type">
-        <option value="program">Program</option>
-        <option value="note">Note</option>
-        <option value="app">App</option>
-      </select>
-      <input placeholder="Name" bind:value={fetchName} spellcheck="false" />
-      <button type="submit" disabled={!!app.busy || !fetchName.trim()}>Fetch</button>
-    </form>
+        <select bind:value={fetchKind} aria-label="Object type">
+          <option value="program">Program</option>
+          <option value="note">Note</option>
+          <option value="app">App</option>
+        </select>
+        <input placeholder="Name" bind:value={fetchName} spellcheck="false" />
+        <button type="submit" disabled={!!app.busy || !fetchName.trim()}>Fetch</button>
+      </form>
+    {/if}
 
-    <div class="chat">
-      <h3 class="pad">
-        Chat
-        {#if app.helpPending}
-          <button class="help-btn" onclick={clearHelp} disabled={!!app.busy} title="Turn off the Help• flag on the calculator">
-            <Icon name="back_hand" size={14} /> Clear help
-          </button>
+    {#if ui.chat}
+      <div class="chat">
+        <h3 class="pad">
+          Chat
+          {#if app.helpPending}
+            <button class="help-btn" onclick={clearHelp} disabled={!!app.busy} title="Turn off the Help• flag on the calculator">
+              <Icon name="back_hand" size={14} /> Clear help
+            </button>
         {/if}
         {#if app.chat.length}<button class="link" onclick={clearChat} title="Clear the chat log">clear</button>{/if}
       </h3>
@@ -130,6 +147,7 @@
         <button type="submit" disabled={!!app.busy || !chatText}>Send</button>
       </form>
     </div>
+    {/if}
 
     <div class="lists">
       <h3 class="pad">Apps {#if app.calcListedAt}<span class="muted">({app.calcApps.length})</span>{/if}</h3>
@@ -148,7 +166,7 @@
             >
           </li>
         {:else}
-          <li class="muted">{app.calcListedAt ? 'No apps' : 'Click “List contents” to read them'}</li>
+          <li class="muted">{app.calcListedAt ? 'No apps' : notListed}</li>
         {/each}
       </ul>
       {#each [{ title: 'Programs', items: programs, kind: 'program' }, { title: 'Notes', items: notes, kind: 'note' }] as group (group.kind)}
@@ -168,7 +186,7 @@
                 aria-label="Delete {o.name} from the calculator"><Icon name="delete" /></button>
             </li>
           {:else}
-            <li class="muted">{app.calcListedAt ? `No ${group.title.toLowerCase()}` : 'Click “List contents” to read them'}</li>
+            <li class="muted">{app.calcListedAt ? `No ${group.title.toLowerCase()}` : notListed}</li>
           {/each}
         </ul>
       {/each}
@@ -177,6 +195,15 @@
 </section>
 
 <style>
+  .actions .icon {
+    box-sizing: border-box;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
   .pad {
     padding: 6px 10px;
     margin: 0;

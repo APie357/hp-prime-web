@@ -4,12 +4,43 @@
   import type { IconName } from '../lib/icons';
   import type { PixelMode } from '../lib/screen';
   import { screen, setPixelMode } from '../lib/state.svelte';
-  import { resolvedTheme, setRemoteKeys, setTheme, ui, type ThemePref } from '../lib/ui.svelte';
+  import { resolvedTheme, setFlag, setTheme, ui, type Flag, type ThemePref } from '../lib/ui.svelte';
 
   const THEMES: { value: ThemePref; label: string; icon: IconName }[] = [
     { value: 'auto', label: 'Auto', icon: 'brightness_auto' },
     { value: 'light', label: 'Light', icon: 'light_mode' },
     { value: 'dark', label: 'Dark', icon: 'dark_mode' },
+  ];
+
+  const GROUPS: { title: string; icon?: IconName; items: { flag: Flag; label: string; hint: string }[] }[] = [
+    {
+      title: 'Calculator',
+      items: [
+        { flag: 'listOnConnect', label: 'List contents on connect', hint: 'Read apps, programs and notes when the calculator connects (~20 s).' },
+        { flag: 'chat', label: 'Chat', hint: 'Send messages to the calculator and see its replies and Help requests.' },
+      ],
+    },
+    {
+      title: 'Advanced',
+      icon: 'tune',
+      items: [{ flag: 'fetchByName', label: 'Fetch by name', hint: 'Get one program, note or app from the calculator by typing its name.' }],
+    },
+    {
+      title: 'Experimental',
+      icon: 'science',
+      items: [
+        {
+          flag: 'remoteKeys',
+          label: 'Remote keys',
+          hint: 'Keypad, Test keys and typing on the screen. On the G2, injected keys are often queued until a real key is pressed.',
+        },
+        {
+          flag: 'backupRestore',
+          label: 'Backup and restore',
+          hint: 'Download everything as a .zip, and send its programs and notes back. Not yet tested on hardware.',
+        },
+      ],
+    },
   ];
 
   let dialog: HTMLDialogElement;
@@ -53,19 +84,20 @@
       <p class="hint muted">How screenshots read the calculator's 16-bit pixels. Change it if colors look wrong.</p>
     </section>
 
-    <section>
-      <h3><Icon name="science" size={16} /> Experimental</h3>
-      <label class="check">
-        <input type="checkbox" checked={ui.remoteKeys} onchange={(e) => setRemoteKeys(e.currentTarget.checked)} />
-        <span>
-          Remote keys
-          <span class="hint muted">
-            Keypad, Test keys and typing on the screen. On the G2, injected keys are often queued until a real key is
-            pressed.
-          </span>
-        </span>
-      </label>
-    </section>
+    {#each GROUPS as g (g.title)}
+      <section>
+        <h3>{#if g.icon}<Icon name={g.icon} size={16} />{/if} {g.title}</h3>
+        {#each g.items as it (it.flag)}
+          <label class="check">
+            <input type="checkbox" checked={ui[it.flag]} onchange={(e) => setFlag(it.flag, e.currentTarget.checked)} />
+            <span>
+              {it.label}
+              <span class="hint muted">{it.hint}</span>
+            </span>
+          </label>
+        {/each}
+      </section>
+    {/each}
 
     <footer>
       <button class="primary" type="button" onclick={close}>Done</button>
@@ -166,6 +198,9 @@
   }
   .check input {
     margin-top: 2px;
+  }
+  .check + .check {
+    margin-top: 10px;
   }
   .hint {
     display: block;

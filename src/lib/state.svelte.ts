@@ -1,6 +1,7 @@
 /** Application state and actions shared by the components. */
 import { log } from './hid/log';
 import { askConfirm, askText } from './dialogs.svelte';
+import { ui } from './ui.svelte';
 import { decodeText, isValidName, KEY_MODES, KIND_TYPE, PrimeSession, type KeyMode, type TextKind } from './hid/session';
 import type { PrimeFile } from './hid/parsers';
 import { backupFileName, buildBackupZip, readBackupZip } from './files/backup';
@@ -244,11 +245,13 @@ async function busy<T>(label: string, fn: () => Promise<T>): Promise<T | undefin
 // ------------------------------------------------------------- device
 
 export async function connect(): Promise<void> {
+  const was = app.connected;
   await busy('Connecting', async () => {
     const granted = (await grantedPrimes())[0];
     const device = granted ?? (await requestPrime());
     if (device) await openDevice(device);
   });
+  await afterConnect(was);
 }
 
 /** Open an already-granted calculator without a picker: on page load and when one is plugged in. */
@@ -257,6 +260,7 @@ export async function autoConnect(): Promise<void> {
   const device = (await grantedPrimes().catch(() => []))[0];
   if (!device) return;
   await busy('Reconnecting', () => openDevice(device));
+  await afterConnect(false);
 }
 
 async function openDevice(device: HIDDevice): Promise<void> {
@@ -289,6 +293,11 @@ async function openDevice(device: HIDDevice): Promise<void> {
   session.listen();
   const fw = app.info?.firmware ? ` · ${app.info.firmware}` : '';
   setStatus(`Connected to ${app.deviceLabel}${fw}${ok ? '' : ' (no ready reply)'}`, ok ? 'ok' : 'info');
+}
+
+/** After a new connection (outside the connect step's busy lock), list the calculator if the setting is on. */
+async function afterConnect(wasConnected: boolean): Promise<void> {
+  if (!wasConnected && app.connected && ui.listOnConnect) await refreshCalcContents();
 }
 
 export async function disconnect(): Promise<void> {

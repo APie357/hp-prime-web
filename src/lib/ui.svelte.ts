@@ -42,6 +42,14 @@ export const ui = $state({
   layout: { ...LAYOUT_DEFAULTS, ...load<Partial<Layout>>('layout', {}) } as Layout,
   /** Experimental: remote keypad, key test and typing on the screen (key injection is unreliable on the G2). */
   remoteKeys: load<boolean>('remoteKeys', false),
+  /** Read the calculator's apps, programs and notes right after connecting. */
+  listOnConnect: load<boolean>('listOnConnect', true),
+  /** Show the Chat section. */
+  chat: load<boolean>('chat', false),
+  /** Advanced: fetch an object by name. */
+  fetchByName: load<boolean>('fetchByName', false),
+  /** Experimental (untested on hardware): backup to .zip and restore. */
+  backupRestore: load<boolean>('backupRestore', false),
   /** Settings dialog is open (not saved). */
   settingsOpen: false,
 });
@@ -60,9 +68,12 @@ export function setTheme(t: ThemePref): void {
   save('theme', t);
 }
 
-export function setRemoteKeys(on: boolean): void {
-  ui.remoteKeys = on;
-  save('remoteKeys', on);
+/** On/off settings shown in the Settings dialog. */
+export type Flag = 'remoteKeys' | 'listOnConnect' | 'chat' | 'fetchByName' | 'backupRestore';
+
+export function setFlag(k: Flag, on: boolean): void {
+  ui[k] = on;
+  save(k, on);
 }
 
 export function clampSize(k: keyof Layout, v: number): number {
