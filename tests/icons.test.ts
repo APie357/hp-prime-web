@@ -3,7 +3,7 @@ import { ICON_BODY, fileIcon } from '../src/lib/icons';
 
 describe('Material icons', () => {
   it('bundles every icon named in the glob as path markup', () => {
-    expect(Object.keys(ICON_BODY)).toHaveLength(29);
+    expect(Object.keys(ICON_BODY)).toHaveLength(30);
     for (const [name, body] of Object.entries(ICON_BODY)) {
       expect(body, name).toMatch(/^<path d="[Mm]/);
       expect(body, name).not.toContain('<svg');

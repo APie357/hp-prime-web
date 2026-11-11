@@ -4,7 +4,7 @@
  * so add a name here (and to the pattern) before using it.
  */
 const raw = import.meta.glob(
-  '/node_modules/@material-symbols/svg-400/rounded/{add,apps,article,back_hand,brightness_auto,circle-fill,close,code,dark_mode,data_object,database,delete,description,draft,edit,folder,image,info,keyboard_arrow_down,keyboard_arrow_left,keyboard_arrow_right,keyboard_arrow_up,light_mode,play_arrow,refresh,upload,usb,usb_off,widgets}.svg',
+  '/node_modules/@material-symbols/svg-400/rounded/{add,apps,article,back_hand,brightness_auto,circle-fill,close,code,dark_mode,data_object,database,delete,description,draft,edit,folder,folder_open,image,info,keyboard_arrow_down,keyboard_arrow_left,keyboard_arrow_right,keyboard_arrow_up,light_mode,play_arrow,refresh,upload,usb,usb_off,widgets}.svg',
   { eager: true, query: '?raw', import: 'default' },
 ) as Record<string, string>;
 
@@ -25,6 +25,7 @@ export type IconName =
   | 'draft'
   | 'edit'
   | 'folder'
+  | 'folder_open'
   | 'image'
   | 'info'
   | 'keyboard_arrow_down'

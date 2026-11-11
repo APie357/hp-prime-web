@@ -94,31 +94,29 @@
 
 <section class="panel">
   <header>
-    <h2>Files</h2>
+    {#if app.needsPermission}
+      <button class="wide" onclick={reopenFolder}>Reopen “{app.workspaceLabel}”</button>
+    {:else}
+      <h2 class="ws-title" title={app.workspaceKind === 'folder' ? 'Files in a local folder' : 'Files stored in this browser'}>
+        <Icon name={app.workspaceKind === 'folder' ? 'folder' : 'database'} size={16} />
+        <span class="ws-name">{app.workspaceLabel || 'Files'}</span>
+      </h2>
+    {/if}
     <div class="actions">
+      {#if folderAccessSupported()}
+        <button class="only-icon" title="Open a local folder as the workspace" aria-label="Open folder" onclick={openFolder}
+          ><Icon name="folder_open" size={16} /></button
+        >
+      {/if}
+      {#if app.workspaceKind !== 'browser'}
+        <button class="only-icon" title="Use browser storage" aria-label="Use browser storage" onclick={openBrowserStorage}
+          ><Icon name="database" size={16} /></button
+        >
+      {/if}
       <button class="tool" title="New program, note or app" onclick={() => (app.newFileOpen = true)}><Icon name="add" size={15} />New</button>
       <button class="only-icon" title="Refresh" aria-label="Refresh" onclick={refreshFiles}><Icon name="refresh" size={16} /></button>
     </div>
   </header>
-
-  <div class="ws">
-    {#if folderAccessSupported()}
-      <button class="tool" title="Open a local folder as the workspace" onclick={openFolder}><Icon name="folder" size={15} />Open</button>
-    {/if}
-    {#if app.needsPermission}
-      <button class="wide" onclick={reopenFolder}>Reopen “{app.workspaceLabel}”</button>
-    {:else if app.workspaceLabel}
-      <span class="ws-label" title={app.workspaceKind === 'folder' ? 'Local folder' : 'Stored in this browser'}>
-        <Icon name={app.workspaceKind === 'folder' ? 'folder' : 'database'} size={16} />
-        <span class="ws-name">{app.workspaceLabel}</span>
-      </span>
-    {/if}
-    {#if app.workspaceKind !== 'browser'}
-      <button class="only-icon" title="Use browser storage" aria-label="Use browser storage" onclick={openBrowserStorage}
-        ><Icon name="database" size={16} /></button
-      >
-    {/if}
-  </div>
 
   <ul>
     {#each apps as name (name)}
@@ -192,14 +190,35 @@
 </section>
 
 <style>
-  .ws {
-    padding: 8px;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
+  header {
     gap: 8px;
   }
-  /* Header and workspace-row buttons share one size so their edges line up. */
+  /* The workspace name is the panel title; its icon lines up with the file icons below. */
+  .ws-title {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding-left: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--fg);
+  }
+  .ws-title :global(svg) {
+    color: var(--muted);
+  }
+  .ws-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .actions {
+    flex: none;
+  }
+  /* Header buttons share one height so their edges line up. */
   .tool,
   .only-icon {
     flex: none;
@@ -210,35 +229,22 @@
     justify-content: center;
     font-size: 12px;
   }
-  .panel header .actions .tool,
-  .ws .tool {
+  .panel header .actions .tool {
     gap: 4px;
     padding: 0 8px 0 5px;
   }
-  .panel header .actions .only-icon,
-  .ws .only-icon {
+  .panel header .actions .only-icon {
     width: 24px;
     padding: 0;
   }
-  .ws .only-icon {
-    margin-left: auto;
-  }
-  .ws-label {
+  .wide {
+    flex: 1;
     min-width: 0;
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 13px;
-    color: var(--muted);
-  }
-  .ws-name {
-    color: var(--fg);
+    height: 24px;
+    font-size: 12px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-  .wide {
-    font-size: 12px;
   }
   ul {
     list-style: none;
