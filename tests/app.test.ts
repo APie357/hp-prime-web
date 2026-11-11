@@ -9,8 +9,10 @@ import {
   decodeAppProgram,
   encodeAppText,
   folderToApp,
+  newAppStarter,
   noneBag,
   parseAppPayload,
+  pythonModuleName,
 } from '../src/lib/files/app';
 import { concat, utf16le } from '../src/lib/hid/bytes';
 
@@ -68,6 +70,17 @@ describe('app payload', () => {
     expect(baseAppOf(bag)).toBe('None');
     const p = { bag, note: encodeAppText(''), program: encodeAppText('#PYTHON START()\n#END\n'), files: [] };
     expect(parseAppPayload(buildAppPayload(p))).toEqual(p);
+  });
+
+  it('makes a Python starter: a module plus #PYTHON blocks that run it', () => {
+    expect(pythonModuleName('My Game!')).toBe('my_game');
+    expect(pythonModuleName('3D')).toBe('app_3d');
+    const s = newAppStarter('My Game', 'None', 'python');
+    expect(s.files.map((f) => f.name)).toEqual(['my_game.py']);
+    expect(s.program).toContain('#PYTHON START()\n');
+    expect(s.program).toContain('import my_game\nmy_game.run()\n#END');
+    expect(new TextDecoder().decode(s.files[0].data)).toContain('def run():');
+    expect(newAppStarter('X', 'Function', 'ppl').files).toEqual([]);
   });
 
   it('rejects data that is not an app', () => {

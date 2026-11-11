@@ -1,12 +1,19 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { isValidAppName } from '../lib/files/app';
+  import { isValidAppName, pythonModuleName, type AppLanguage } from '../lib/files/app';
   import { app, appBases, createApp, refreshCalcContents, type AppBase } from '../lib/state.svelte';
 
   let dialog: HTMLDialogElement;
   let name = $state('');
   let bases = $state<AppBase[] | null>(null);
   let chosen = $state(0);
+  let lang = $state<AppLanguage>('python');
+  /** Follow the base until the user picks a language themselves. */
+  let langTouched = false;
+  $effect(() => {
+    const base = bases?.[chosen]?.base;
+    if (!langTouched && base) lang = base === 'None' || base === 'Python' ? 'python' : 'ppl';
+  });
   const valid = $derived(isValidAppName(name.trim()));
 
   async function load() {
@@ -24,7 +31,7 @@
   async function submit(e: Event) {
     e.preventDefault();
     if (!bases?.length || !valid) return;
-    if (await createApp(name.trim(), bases[chosen])) close();
+    if (await createApp(name.trim(), bases[chosen], lang)) close();
   }
 
   async function list() {
@@ -82,6 +89,23 @@
         </span>
       {/if}
     </label>
+    <fieldset>
+      <legend>Program</legend>
+      <label class="radio">
+        <input type="radio" name="lang" value="python" bind:group={lang} onchange={() => (langTouched = true)} />
+        <span>
+          Python
+          <span class="muted">
+            — <code>{pythonModuleName(name.trim() || 'app')}.py</code> holds the code; the app program runs it with
+            <code>#PYTHON START()</code>
+          </span>
+        </span>
+      </label>
+      <label class="radio">
+        <input type="radio" name="lang" value="ppl" bind:group={lang} onchange={() => (langTouched = true)} />
+        <span>PPL <span class="muted">— a <code>START()</code> program</span></span>
+      </label>
+    </fieldset>
     <footer>
       <button type="button" onclick={close}>Cancel</button>
       <button class="primary" type="submit" disabled={!valid || !bases?.length}>Create</button>
@@ -127,6 +151,26 @@
     border: 1px solid var(--input-border);
     border-radius: 4px;
     padding: 3px 4px;
+  }
+  fieldset {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin: 0 0 10px;
+    padding: 6px 10px 2px;
+  }
+  legend {
+    font-size: 12px;
+    color: var(--muted);
+    padding: 0 4px;
+  }
+  label.radio {
+    flex-direction: row;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+  code {
+    font-size: 12px;
   }
   .hint {
     font-size: 12px;

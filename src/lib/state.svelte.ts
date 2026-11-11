@@ -21,7 +21,8 @@ import {
   folderToApp,
   isSystemApp,
   isValidAppName,
-  newAppProgram,
+  newAppStarter,
+  type AppLanguage,
   noneBag,
   parseAppPayload,
 } from './files/app';
@@ -958,12 +959,15 @@ export async function renameApp(name: string): Promise<void> {
   setStatus(`Renamed app ${name} → ${to} (the calculator copy keeps its old name until you send it)`, 'ok');
 }
 
+/** A file name that's safe inside an app folder on any OS. */
+const SAFE_FILE_NAME = /^[^\\/:*?"<>|\x00-\x1f]{1,64}$/;
+
 async function renameAppExtraFile(appName: string, file: string): Promise<void> {
   const dir = appDirName(appName);
   const oldInner = file.slice(dir.length + 1);
   const inner = prompt(`Rename ${oldInner} to:`, oldInner)?.trim();
   if (!inner || inner === oldInner) return;
-  if (!/^[^\/:*?"<>| -]{1,64}$/.test(inner) || isAppOwnFile(appName, `${dir}/${inner}`)) {
+  if (!SAFE_FILE_NAME.test(inner) || isAppOwnFile(appName, `${dir}/${inner}`)) {
     return setStatus(`"${inner}" can't be used as a file name here`, 'error');
   }
   const to = `${dir}/${inner}`;
@@ -984,7 +988,7 @@ export async function addAppFile(appName: string): Promise<void> {
   const inner = prompt('New file name (e.g. module.py):', 'module.py')?.trim();
   if (!inner) return;
   const dir = appDirName(appName);
-  if (!/^[^\/:*?"<>| -]{1,64}$/.test(inner) || isAppOwnFile(appName, `${dir}/${inner}`)) {
+  if (!SAFE_FILE_NAME.test(inner) || isAppOwnFile(appName, `${dir}/${inner}`)) {
     return setStatus(`"${inner}" can't be used as a file name here`, 'error');
   }
   const path = `${dir}/${inner}`;
@@ -1024,7 +1028,7 @@ export async function appBases(): Promise<AppBase[]> {
 }
 
 /** Create a new app folder from a base app's data, with a starter program. */
-export async function createApp(name: string, base: AppBase): Promise<boolean> {
+export async function createApp(name: string, base: AppBase, lang: AppLanguage = 'ppl'): Promise<boolean> {
   if (!isValidAppName(name)) {
     setStatus(`"${name}" is not a valid app name`, 'error');
     return false;
@@ -1034,20 +1038,19 @@ export async function createApp(name: string, base: AppBase): Promise<boolean> {
     setStatus(`${appDirName(name)} already exists`, 'error');
     return false;
   }
-  const parts = {
-    bag: base.bag,
-    note: encodeAppText(''),
-    program: encodeAppText(newAppProgram(name, base.base)),
-    files: [] as { name: string; data: Uint8Array }[],
-  };
+  const starter = newAppStarter(name, base.base, lang);
+  const parts = { bag: base.bag, note: encodeAppText(''), program: encodeAppText(starter.program), files: starter.files };
   for (const e of appToFolder(name, parts)) {
     await ws.writeBytes(e.path, e.data);
     const t = await ws.stat(e.path);
     if (t !== null) known.set(e.path, t);
   }
   await refreshFiles();
+  // Python: open the module (where the code goes) with the app program in a tab beside it.
   openFile(`${appDirName(name)}/${name}.hpappprgm`);
-  setStatus(`Created app ${name} based on ${base.base}. Send it to put it on the calculator (experimental)`, 'ok');
+  for (const f of starter.files) openFile(`${appDirName(name)}/${f.name}`);
+  const what = lang === 'python' ? 'Python app' : 'app';
+  setStatus(`Created ${what} ${name} based on ${base.base}. Send it to put it on the calculator (experimental)`, 'ok');
   return true;
 }
 

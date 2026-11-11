@@ -183,12 +183,36 @@ export function noneBag(): Uint8Array {
   return Uint8Array.from(atob(NONE_BAG_B64), (c) => c.charCodeAt(0));
 }
 
-/** Starter program for a new app, by base app. */
-export function newAppProgram(name: string, base: string): string {
-  if (base === 'Python') {
-    return `#PYTHON START()\nprint("Hello from ${name}")\n#END\n`;
+export type AppLanguage = 'ppl' | 'python';
+
+/** A Python module name derived from an app name: `My Game!` → `my_game`. */
+export function pythonModuleName(appName: string): string {
+  let m = appName.toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '');
+  if (!m || /^\d/.test(m)) m = 'app_' + m;
+  return m;
+}
+
+/**
+ * Starter files for a new app. PPL: a `START()` program. Python: the app program starts and
+ * resets a module shipped with the app (the layout Python apps on the calculator use), with the
+ * code in `<module>.py`.
+ */
+export function newAppStarter(name: string, base: string, lang: AppLanguage): { program: string; files: AppFile[] } {
+  if (lang === 'python') {
+    const mod = pythonModuleName(name);
+    const program =
+      `#PYTHON START()\n# Runs when ${name} is started from the Apps screen.\nimport ${mod}\n${mod}.run()\n#END\n\n` +
+      `#PYTHON RESET()\n# Runs when the app is reset.\nimport ${mod}\n${mod}.reset()\n#END\n`;
+    const py =
+      `# ${name}: Python code for the app.\n\n` +
+      `def run():\n    print("Hello from ${name}")\n\n` +
+      `def reset():\n    pass\n`;
+    return { program, files: [{ name: `${mod}.py`, data: new TextEncoder().encode(py) }] };
   }
-  return `// ${name}: an app based on ${base}\nSTART()\nBEGIN\n  PRINT();\n  PRINT("Hello from ${name}");\nEND;\n`;
+  return {
+    program: `// ${name}: an app based on ${base}\nSTART()\nBEGIN\n  PRINT();\n  PRINT("Hello from ${name}");\nEND;\n`,
+    files: [],
+  };
 }
 
 /** Names the calculator would accept for a new app (same rule as notes, no leading &). */
