@@ -1,6 +1,6 @@
 /**
  * App icons: `icon.png` inside the app, 38×38 pixels (the size Python apps on a G2 use, e.g. Dynatris).
- * Any image is centre-cropped to a square and scaled to fit.
+ * Any image is center-cropped to a square and scaled to fit.
  */
 
 export const ICON_FILE = 'icon.png';
@@ -16,8 +16,8 @@ export interface IconResult {
   scaled: boolean;
 }
 
-/** Centre square of a width×height image: [sx, sy, side]. */
-export function centreSquare(width: number, height: number): [number, number, number] {
+/** Center square of a width×height image: [sx, sy, side]. */
+export function centerSquare(width: number, height: number): [number, number, number] {
   const side = Math.min(width, height);
   return [Math.floor((width - side) / 2), Math.floor((height - side) / 2), side];
 }
@@ -31,7 +31,7 @@ export async function makeAppIcon(file: Blob): Promise<IconResult> {
     throw new Error("that file isn't an image this browser can read");
   }
   const { width, height } = bmp;
-  const [sx, sy, side] = centreSquare(width, height);
+  const [sx, sy, side] = centerSquare(width, height);
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = ICON_SIZE;
   const g = canvas.getContext('2d')!;
@@ -66,7 +66,7 @@ export async function makeAppIcon(file: Blob): Promise<IconResult> {
   };
 }
 
-/** Pick an image file with the browser's file dialog; null when cancelled. */
+/** Pick an image file with the browser's file dialog; null when canceled. */
 export function pickImage(): Promise<File | null> {
   return new Promise((resolve) => {
     const input = document.createElement('input');

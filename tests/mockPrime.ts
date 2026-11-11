@@ -1,6 +1,6 @@
 /**
  * A simulated calculator speaking legacy framing, for session tests.
- * Mirrors observed G2 behaviour: 'Y' ready reply, silent F7, F8 silent for
+ * Mirrors observed G2 behavior: 'Y' ready reply, silent F7, F8 silent for
  * missing objects, NUL-terminated stored program text.
  */
 import { concat, fromUtf16le, utf16le } from '../src/lib/hid/bytes';

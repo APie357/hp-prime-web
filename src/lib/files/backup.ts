@@ -31,7 +31,7 @@ export interface BackupManifest {
   objects: BackupEntry[];
 }
 
-/** File-name-safe version of a calculator object name (kept recognisable). */
+/** File-name-safe version of a calculator object name (kept recognizable). */
 export function safeFileName(name: string): string {
   const s = name.replace(/[\\/:*?"<>|\x00-\x1f]/g, '_').replace(/^\.+/, '_');
   return s || '_';
@@ -72,7 +72,7 @@ export function buildBackupZip(files: PrimeFile[], device: BackupManifest['devic
         }
         entry.text = `apps/${base}.hpappdir/`;
       } catch {
-        /* unrecognised app data: raw/ still has it */
+        /* unrecognized app data: raw/ still has it */
       }
     }
     objects.push(entry);
@@ -94,7 +94,7 @@ export function readBackupZip(zip: Uint8Array): { manifest: BackupManifest; file
   const m = entries['manifest.json'];
   if (!m) throw new Error('not an HP Prime Web backup (no manifest.json)');
   const manifest = JSON.parse(new TextDecoder().decode(m)) as BackupManifest;
-  if (manifest.format !== 'hp-prime-web-backup') throw new Error('unrecognised backup format');
+  if (manifest.format !== 'hp-prime-web-backup') throw new Error('unrecognized backup format');
   const files = manifest.objects.map((o): PrimeFile => {
     const data = entries[o.raw];
     if (!data) throw new Error(`backup is missing ${o.raw}`);

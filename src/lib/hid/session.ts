@@ -271,7 +271,7 @@ export class PrimeSession {
   }
 
   /**
-   * F7. Current firmware sends no acknowledgement, so silence is success;
+   * F7. Current firmware sends no acknowledgment, so silence is success;
    * an F9 frame means the calculator refused.
    */
   sendFile(type: number, name: string, content: Uint8Array): Promise<{ refused: boolean }> {
@@ -417,7 +417,7 @@ export class PrimeSession {
     });
   }
 
-  /** EC — fire-and-forget; firmware sends no acknowledgement. */
+  /** EC — fire-and-forget; firmware sends no acknowledgment. */
   sendKeys(codes: number[]): Promise<void> {
     return this.exclusive(() => this.sendMessage(C.sendKeys(codes)));
   }

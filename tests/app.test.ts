@@ -90,10 +90,10 @@ describe('app payload', () => {
 });
 
 describe('app icon fitting', () => {
-  it('takes the centre square of the picked image', async () => {
-    const { centreSquare } = await import('../src/lib/files/icon');
-    expect(centreSquare(38, 38)).toEqual([0, 0, 38]);
-    expect(centreSquare(120, 80)).toEqual([20, 0, 80]);
-    expect(centreSquare(50, 101)).toEqual([0, 25, 50]);
+  it('takes the center square of the picked image', async () => {
+    const { centerSquare } = await import('../src/lib/files/icon');
+    expect(centerSquare(38, 38)).toEqual([0, 0, 38]);
+    expect(centerSquare(120, 80)).toEqual([20, 0, 80]);
+    expect(centerSquare(50, 101)).toEqual([0, 25, 50]);
   });
 });

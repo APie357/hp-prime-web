@@ -354,7 +354,7 @@ export async function sendCurrent(): Promise<boolean> {
     if (existing) {
       const extra = existing.formatted ? '\n\nIts rich-text formatting will be replaced by plain text.' : '';
       if (!confirm(`${kind === 'note' ? 'Note' : 'Program'} "${name}" already exists on the calculator. Overwrite it?${extra}`)) {
-        setStatus('Send cancelled');
+        setStatus('Send canceled');
         return false;
       }
     }
@@ -847,7 +847,7 @@ export async function sendAppFolder(name: string): Promise<boolean> {
         ? `This replaces the built-in ${appDisplayName(name)} app's settings and program on the calculator.`
         : `App "${name}" already exists on the calculator.`;
       if (!confirm(`${what} Overwrite it?`)) {
-        setStatus('Send cancelled');
+        setStatus('Send canceled');
         return false;
       }
     }
@@ -864,7 +864,7 @@ export async function sendAppFolder(name: string): Promise<boolean> {
         setStatus(`Sent app ${appDisplayName(name)} (${r.bytes} B) — read-back verified ✓`, 'ok');
         return true;
       case 'mismatch':
-        setStatus(`Sent app ${appDisplayName(name)}, but the read-back differs (the calculator may have normalised it)`, 'error');
+        setStatus(`Sent app ${appDisplayName(name)}, but the read-back differs (the calculator may have normalized it)`, 'error');
         return false;
       case 'no-reply':
         setStatus(`Sent app ${appDisplayName(name)} (${r.bytes} B); the read-back got no reply`, 'error');
@@ -1036,7 +1036,7 @@ export function iconFitNote(r: IconResult): string {
   return `${how} from ${r.width}×${r.height} to ${ICON_SIZE}×${ICON_SIZE}`;
 }
 
-/** Choose an image and make it the app's icon (centre-cropped to a square, scaled to 38×38). */
+/** Choose an image and make it the app's icon (center-cropped to a square, scaled to 38×38). */
 export async function setAppIcon(name: string, file?: File | null): Promise<void> {
   file ??= await pickImage();
   if (!file) return;
@@ -1298,7 +1298,7 @@ export function openFile(file: string): void {
   saveTabs();
 }
 
-/** Close a tab, saving first. The neighbouring tab becomes current. */
+/** Close a tab, saving first. The neighboring tab becomes current. */
 export async function closeFile(file: string): Promise<void> {
   if (app.dirty.includes(file)) await saveFile(file);
   dropTab(file);

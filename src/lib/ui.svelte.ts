@@ -1,4 +1,4 @@
-/** UI preferences kept in localStorage: colour theme and panel sizes. */
+/** UI preferences kept in localStorage: color theme and panel sizes. */
 
 export type ThemePref = 'auto' | 'light' | 'dark';
 

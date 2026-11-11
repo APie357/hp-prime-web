@@ -28,7 +28,7 @@
   $effect(() => {
     void iconVersion.n;
     const withIcon = apps.filter((a) => app.files.includes(`${appDirName(a)}/${ICON_FILE}`));
-    let cancelled = false;
+    let canceled = false;
     const made: string[] = [];
     void Promise.all(
       withIcon.map(async (a) => {
@@ -39,11 +39,11 @@
         return [a, url] as const;
       }),
     ).then((pairs) => {
-      if (cancelled) return;
+      if (canceled) return;
       iconUrls = Object.fromEntries(pairs.filter((p) => p !== null));
     });
     return () => {
-      cancelled = true;
+      canceled = true;
       // Revoke on the next refresh (the old images stay visible until the new ones load).
       setTimeout(() => made.forEach((u) => URL.revokeObjectURL(u)), 5000);
     };

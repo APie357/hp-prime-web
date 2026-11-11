@@ -53,7 +53,7 @@ The user confirmed on 2026-11-09 that connect, send, receive, list, and fetch wo
   - [x] Apps as `<Name>.hpappdir/` folders: program, Info note, extra files (Python modules) editable; app data and binary files sent as-is
   - [x] List apps (Calculator panel), fetch by name, open into the workspace, delete custom apps (EB type 02)
   - [x] Send an app (overwrite check, read-back verify); ＋ App creates one from a base app's data
-  - [x] App icon (`icon.png`, 38×38 like Dynatris's): 🖼 on the app row or in New app; any image is centre-cropped and scaled
+  - [x] App icon (`icon.png`, 38×38 like Dynatris's): 🖼 on the app row or in New app; any image is center-cropped and scaled
   - [ ] On the G2: does an RGBA PNG icon show in the Apps screen? (Dynatris's is a 4-bit palette PNG; convert if needed)
   - [ ] On the G2: does sending an app work? Does a new app (copied bag, new name) appear in the Apps screen? Does F8 fetch one app?
   - [ ] ▶ Run an app (deferred): e.g. send a helper program that calls `STARTAPP("Name")`, then start it like Send & Run
@@ -77,7 +77,7 @@ Built 2026-11-10; not yet tried in a browser (no headless Chromium on the dev ma
 - [x] Diff view (`DiffView.svelte`, Monaco diff editor): when the read-back mismatches, and when importing over a local file that differs (Keep local / Use calculator's version)
 - [x] Detect outside changes in an opened folder (on window focus and every 3 s): the file list updates; a clean open file reloads; one with unsaved edits shows a diff (Use disk version / Keep mine); saving never overwrites an outside edit without asking
 - [x] Resizable file list, calculator panel and console (drag the edges, arrow keys when focused, double-click to reset); sizes remembered
-- [x] Light theme: ◐/☀/☾ button cycles Auto (follows the system) → Light → Dark; Monaco follows; the keypad stays calculator-coloured
+- [x] Light theme: ◐/☀/☾ button cycles Auto (follows the system) → Light → Dark; Monaco follows; the keypad stays calculator-colored
 - [ ] Try all of the above in Chrome
 
 ## 5. Build / infra

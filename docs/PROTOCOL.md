@@ -57,7 +57,7 @@ report = [seq][up to N payload bytes]          N = report size − 1 (1023 on th
 - An incoming report with `seq = 0xFF` is **out of band**. It isn't part of any message; skip it.
 - The receiver joins the payloads in order. A message is complete when it reaches the length given in its header (§3), or when a short report arrives (only possible from unpadded senders).
 - An incoming report with `seq = 0x00` while a message is half-received starts a new message; drop the partial one.
-- The link is **half-duplex, with no flow control or acknowledgements** in legacy framing. Send one request, read its reply (if any), then send the next. This project funnels every operation through one queue (`PrimeSession`).
+- The link is **half-duplex, with no flow control or acknowledgments** in legacy framing. Send one request, read its reply (if any), then send the next. This project funnels every operation through one queue (`PrimeSession`).
 
 Example: the 8-byte message `F2 01 00 00 00 02 00 00` goes out as one report, `00 F2 01 00 00 00 02 00 00`.
 
@@ -157,7 +157,7 @@ Types `02`, `05` and `06` are verified on the G2. The rest come from PrimeDev an
 
 ### 5.2 `F7`: send an object (host → calculator)
 
-**Verified (G2).** The host sends `F7` with the body after the name. The G2 sends **no acknowledgement**: silence for about 1.5 s means it was accepted. A reply starting with `F9` is treated as a refusal (from older references; never seen on the G2). To be sure it arrived, read it back with `F8` and compare.
+**Verified (G2).** The host sends `F7` with the body after the name. The G2 sends **no acknowledgment**: silence for about 1.5 s means it was accepted. A reply starting with `F9` is treated as a refusal (from older references; never seen on the G2). To be sure it arrived, read it back with `F8` and compare.
 
 Writing an existing name **overwrites it without asking**. Check first with `F8` if that matters.
 
@@ -204,7 +204,7 @@ EB 01 00 00 00 12 06 0E EF A7  4E 00 45 00 57 00 50 00 52 00 4F 00 47 00
 [plain text, UTF-16LE] [00 00] [optional rich-text section]
 ```
 
-- The rich-text section starts with the UTF-16 magic `CSWD110` (or `CSWT110` for an app's Info note), then `FF FF FF FF`, then backslash control words for bold, colours and so on. **Reference (pck).**
+- The rich-text section starts with the UTF-16 magic `CSWD110` (or `CSWT110` for an app's Info note), then `FF FF FF FF`, then backslash control words for bold, colors and so on. **Reference (pck).**
 - Uploading only the plain text works, and the calculator shows it correctly, but it **removes any existing formatting** from that note.
 - Note names are freer than program names: spaces are allowed.
 - The Connectivity Kit sometimes writes 2-byte placeholder notes with junk content. Treat a body under 4 bytes as empty.
@@ -272,15 +272,15 @@ Note that this CRC is **big-endian** and covers the body, unlike the named-objec
 
 | fmt | Size | PNG contents | Status |
 |---|---|---|---|
-| `08` | 320×240 | 16-bit grayscale PNG whose samples are packed colour | **Verified (G2): little-endian RGB555** |
-| `09` | 320×240 | Palette PNG (reduced colours) | Verified (G1) |
+| `08` | 320×240 | 16-bit grayscale PNG whose samples are packed color | **Verified (G2): little-endian RGB555** |
+| `09` | 320×240 | Palette PNG (reduced colors) | Verified (G1) |
 | `0A` | 160×120 | Like `08`, half size | Verified (G1) |
 | `0B` | 160×120 | Like `09`, half size | Verified (G1) |
 | `04`/`05`/`0C`/`0D`/… | | "Changed rectangle" variants used by the Connectivity Kit for live view | Reference. On the G1, `0D` often returned 1×1 frames |
 
-**Colour decoding:** the PNG is "16-bit grayscale", but each sample holds a pixel's colour. On the **G2**, read the sample as little-endian `v`, then `r = (v>>10)&31, g = (v>>5)&31, b = v&31` (RGB555), and widen each value to 8 bits with `(c<<3)|(c>>2)`. On the **G1**, hpemu reports big-endian RGB565 instead. A browser's own PNG decoder converts the samples to gray, which is why this project has its own decoder (`decodePrimePng16`).
+**Color decoding:** the PNG is "16-bit grayscale", but each sample holds a pixel's color. On the **G2**, read the sample as little-endian `v`, then `r = (v>>10)&31, g = (v>>5)&31, b = v&31` (RGB555), and widen each value to 8 bits with `(c<<3)|(c>>2)`. On the **G1**, hpemu reports big-endian RGB565 instead. A browser's own PNG decoder converts the samples to gray, which is why this project has its own decoder (`decodePrimePng16`).
 
-The first byte of a reply can take about 1 s to arrive. The live mirror polls continuously and works on the G2; its frame rate and behaviour while a program runs haven't been measured.
+The first byte of a reply can take about 1 s to arrive. The live mirror polls continuously and works on the G2; its frame rate and behavior while a program runs haven't been measured.
 
 ---
 
@@ -327,7 +327,7 @@ Sending keys works on the G2, but the calculator doesn't act on them right away;
 EC 01 [len u32 BE] [key code] …          one byte per key (hplp)
 ```
 
-**Behaviour on the G2 (verified):** the calculator **queues** keys sent this way but doesn't process them. They take effect when the next physical key is pressed, just before that key's own input. Afterwards the battery icon may disappear from the status bar. All the variants tried behaved the same way:
+**Behavior on the G2 (verified):** the calculator **queues** keys sent this way but doesn't process them. They take effect when the next physical key is pressed, just before that key's own input. Afterwards the battery icon may disappear from the status bar. All the variants tried behaved the same way:
 
 - one key per message, with gaps between them;
 - many keys in one message;
@@ -380,7 +380,7 @@ There is no reply, so follow it with a ready check (`FF` → `59`) to confirm th
 
 ## 12. V2 framing (not used by this project)
 
-**Reference (PrimeDev).** The G2 (firmware build ≥ 10591) supports a framing with message IDs, acknowledgements and retransmission. Legacy framing works fine on the G2, so this project doesn't use V2. It's documented here for completeness.
+**Reference (PrimeDev).** The G2 (firmware build ≥ 10591) supports a framing with message IDs, acknowledgments and retransmission. Legacy framing works fine on the G2, so this project doesn't use V2. It's documented here for completeness.
 
 **Switching:** after getting an `FA` reply in legacy framing, the host sends one **out-of-band** report (sequence `0xFF`):
 
