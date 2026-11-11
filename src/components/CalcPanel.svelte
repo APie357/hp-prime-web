@@ -266,6 +266,11 @@
     border-top: 1px solid var(--border);
     padding-top: 10px;
   }
+  /* Right under the header (info and the optional rows hidden), the header's own border is enough. */
+  header + .chat > h3:first-child,
+  header + .lists > h3:first-child {
+    border-top: none;
+  }
   ul {
     list-style: none;
     margin: 0;
