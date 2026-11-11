@@ -27,19 +27,30 @@ export interface Layout {
   console: number;
 }
 
-export const LAYOUT_DEFAULTS: Layout = { left: 220, right: 340, console: 200 };
+export const LAYOUT_DEFAULTS: Layout = { left: 256, right: 340, console: 200 };
 export const LAYOUT_LIMITS: Record<keyof Layout, [number, number]> = {
-  left: [140, 480],
+  left: [256, 480],
   right: [260, 720],
   console: [80, 600],
 };
+
+/** Saved panel sizes, clamped to the current limits (they may have changed since they were saved). */
+function loadLayout(): Layout {
+  const saved = { ...LAYOUT_DEFAULTS, ...load<Partial<Layout>>('layout', {}) };
+  for (const k of Object.keys(LAYOUT_LIMITS) as (keyof Layout)[]) {
+    const [lo, hi] = LAYOUT_LIMITS[k];
+    const v = Number(saved[k]);
+    saved[k] = Number.isFinite(v) ? Math.round(Math.min(hi, Math.max(lo, v))) : LAYOUT_DEFAULTS[k];
+  }
+  return saved;
+}
 
 const media = typeof matchMedia === 'function' ? matchMedia('(prefers-color-scheme: light)') : null;
 
 export const ui = $state({
   theme: load<ThemePref>('theme', 'auto'),
   systemLight: media?.matches ?? false,
-  layout: { ...LAYOUT_DEFAULTS, ...load<Partial<Layout>>('layout', {}) } as Layout,
+  layout: loadLayout(),
   /** Experimental: remote keypad, key test and typing on the screen (key injection is unreliable on the G2). */
   remoteKeys: load<boolean>('remoteKeys', false),
   /** Read the calculator's apps, programs and notes right after connecting. */
