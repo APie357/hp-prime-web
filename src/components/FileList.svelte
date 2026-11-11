@@ -113,10 +113,10 @@
           ><Icon name="database" size={16} /></button
         >
       {/if}
+      <button class="only-icon" title="Refresh" aria-label="Refresh" onclick={refreshFiles}><Icon name="refresh" size={16} /></button>
       <button class="only-icon" title="New program, note or app" aria-label="New" onclick={() => (app.newFileOpen = true)}
         ><Icon name="add" size={16} /></button
       >
-      <button class="only-icon" title="Refresh" aria-label="Refresh" onclick={refreshFiles}><Icon name="refresh" size={16} /></button>
     </div>
   </header>
 
