@@ -15,7 +15,7 @@ The goal is a browser IDE for writing HP Prime PPL ("HP Basic") programs and sen
 - **Screen + run (2026-11-10):** `ScreenPanel.svelte` shows screenshots (single, live mirror, save PNG); the pixel format is in Settings. **The screen displays correctly on the G2 with the default RGB555.** Key injection only queues keys on the G2 (see Remote run); a key-mode picker next to Test keys selects the encoding. `Keypad.svelte` is a remote keypad, and typing on the focused screen also sends keys (`keysForKeyboardEvent`). The key table and the text→keys mapping are in `src/lib/hid/keys.ts`: upper case is Alpha+key, lower case is Alpha+Shift+key (confirmed on the G2), and `_` can't be typed. `PrimeSession.pressKeys` sends **one `EC` message per key** with an 80 ms gap. PrimeDev only defines the codes (`HpKey.cs`; `SENDKEY = 0xEC`); no reference builds the message, so the layout is unconfirmed. **Test keys** (`probeKeys`) runs the probe and remembers the result. **▶ Send & Run** sends, then types Home, Esc, the name (`runTarget`: the exported procedure named like the file, else the first exported one; numeric args go inside `( )`), Enter, and turns on the live screen. It warns when the screen didn't change.
 - **More calculator features (2026-11-10, untested on hardware):** **Delete** (✕ per object in the Calculator panel) sends `EB`, treats an F9 reply as a refusal, and confirms with an F8 probe. **Backup to .zip** (`src/lib/files/backup.ts`) stores every F9 object raw plus readable programs/notes and a `manifest.json`. **Restore…** sends only the programs and notes from such a zip through `sendText` (with read-back). **Chat** (verified on the G2): `F2` sends a message, and the calculator's replies come in unprompted as `F2 01 len(u32BE) text(UTF-16LE) 00 00` (any text or equation). The Messages app's **Help** softkey sends an empty message (`len 2`, body `00 00`), identical on every press, and the UI shows it as a help request. It only sets the Help• flag; **sending the same empty chat back (`F2 01 00 00 00 02 00 00`) clears it** (verified on the G2), which is what the ✋ Clear help button does. Receiving works in the web UI, including while the live screen mirror is running (G2, 2026-11-10). Bytes after `len` are stale buffer contents, so ignore them. `PrimeSession.listen()` reads the link while idle to catch them (it yields to operations through `ReportPort.cancelRead`), and `recvMessage` also passes along a chat that arrives ahead of a reply. **Delete is verified on the G2: `EB` gets no reply.** The app **auto-reconnects** to a granted calculator on load and on the HID `connect` event.
 - **Apps (2026-11-10):** `src/lib/files/app.ts` parses and builds the type-02 body. It is a series of u32BE-length sections: bag (`.hpapp`, byte 20 = base app), Info note, program (UTF-16LE + NUL), then extra files (name UTF-16 + `00 00` + data). It round-trips every app in the user's G2 backup. The workspace stores apps as `<Name>.hpappdir/` (`Workspace` handles one level of subfolders and binary files; `src/lib/files/kinds.ts` decides type and encoding per path). The calculator's Send key pushes unsolicited `F7`s; `PrimeSession.onObject` gets them and state asks before saving. Sending apps, creating apps and F8 for apps are **untested on hardware**. Running apps is deferred.
-- **Exam-mode configurations (2026-11-11, receiving verified on the G2; sending untested):** behind **Settings → Calculator → Exam mode configurations** (off). Type `0B` objects from the F9 listing appear in the Calculator panel (open, delete; `Default Exam` can't be deleted). They save as top-level `<Name>.hpexammode` files (raw bytes, the Connectivity Kit's extension) and open in `ExamEditor.svelte` (a form, not Monaco). Send = `sendExamFile` (overwrite check, `sendObject` + read-back); the stored name is set to the file name first. The calculator's Send key pushes them too. The format (`src/lib/files/exam.ts`, `docs/formats/exam-mode.md`) was mapped from 12 single-change configurations made on the G2 (2026-11-11): name, timeout, option flags (memory, angle, LED/security code), CAS (0x040 bit 7) and a linear CRC-32 at 0x41C that `updateChecksum` keeps exact on every edit (it reproduces the calculator's values). The password hash (0x440, 64 B) depends only on the password and can't be computed, only copied from another configuration. Other disabled features are raw bits until mapped (`EXAM_FEATURES`). Open: whether the CRC covers the name; sending configurations to the calculator.
+- **Exam-mode configurations (2026-11-11, receiving verified on the G2; sending untested):** behind **Settings → Calculator → Exam mode configurations** (off). Type `0B` objects from the F9 listing appear in the Calculator panel (open, delete; `Default Exam` can't be deleted). They save as top-level `<Name>.hpexammode` files (raw bytes, the Connectivity Kit's extension) and open in `ExamEditor.svelte` (a form, not Monaco). Send = `sendExamFile` (overwrite check, `sendObject` + read-back); the stored name is set to the file name first. The calculator's Send key pushes them too. The format (`src/lib/files/exam.ts`, `docs/formats/exam-mode.md`) was mapped from 12 single-change configurations made on the G2 (2026-11-11): name, timeout, option flags (memory, angle, LED/security code), CAS (0x040 bit 7) and a linear CRC-32 at 0x41C that `updateChecksum` keeps exact on every edit (it reproduces the calculator's values). The password hash (0x440, 64 B) depends only on the password and can't be computed, only copied from another configuration. Other disabled features are raw bits until mapped (`EXAM_FEATURES`). Open: whether the CRC covers the name; sending configurations to the calculator; renamed configurations not showing up (TODO §2). Setting a password needs the hash algorithm (probably keyed; TODO §2).
 - **Next:** hardware checks (backup/restore, auto-reconnect); why Send & Run works while single keys don't (TODO §1, plus screen colors and `EC` on the G2) → `.hpprgm` import/export → language-feature browser check.
 
 ## Conventions
@@ -47,58 +47,72 @@ Sources: `debrouxl/hplp` (`libhpcalcs/src/prime_vpkt.c`, `prime_cmd.c`, `hplibs.
 ## Architecture / file layout
 ```
 AGENTS.md                      plan + protocol notes + conventions (kept current)
+TODO.md                        task list: hardware checks, features, bugs
 docs/PROTOCOL.md               HP Prime G2 USB protocol reference (verified vs reference vs unknown)
 docs/formats/                  object body formats: program.md, note.md, app.md, exam-mode.md
-package.json, vite.config.ts, tsconfig.json, svelte.config.js
+package.json, vite.config.ts, tsconfig*.json, svelte.config.js
 udev/60-hp-prime.rules         hidraw access on Linux (TAG+="uaccess" for 03f0:0441/1541/2441)
 THIRD_PARTY.md                 attribution (hplp GPL ref-only, pck/hpemu MIT, PrimeDev keycodes)
 src/
-  main.ts, App.svelte          layout: file tree | editor | right panel (device/screen); bottom console
+  main.ts, App.svelte          toolbar (Connect | Send | Send & Run | settings) and layout:
+                               file list | editor | right panel (screen + calculator); bottom console; status bar
+  lib/state.svelte.ts          app state and every action the UI calls (the only way into the protocol layer)
+  lib/ui.svelte.ts             UI preferences in localStorage: theme, setting flags, panel sizes
+  lib/dialogs.svelte.ts        askText/askConfirm/showAlert (queued modals; no native prompt/alert/confirm)
   lib/hid/
-    transport.ts   WebHID wrapper: requestDevice filters, open/close, report size from descriptor,
-                   inputreport → async queue with read(timeoutMs), drain(), connect/disconnect events,
-                   optional pad-to-report-size setting
+    port.ts        ReportPort interface (WebHID or test mocks)
+    transport.ts   WebHID wrapper: requestDevice filters, report size from the descriptor, input queue
+                   with read(timeoutMs), drain(), connect/disconnect events, optional report padding
     framing.ts     pure legacy fragment()/Reassembler (capacity param); `LinkFraming` interface
-    crc16.ts       CCITT table CRC
-    commands.ts    builders: ready, info, screenshot, requestFile, sendFile, backup, keys, chat, time, delete
-    parsers.ts     info (name/version/build/serial), file reply, screenshot → PNG → RGB565→RGBA canvas
-    session.ts     PrimeSession: serialized op queue (mutex), perform(msg, expectReply, timeout),
-                   sendProgram(), readProgram(), backup(), screenshot(), sendKeys()
-    keys.ts        key codes 0–50 + alpha letters, text→key sequences, Home→name→Enter run sequence
+    crc16.ts       CRC-16/XMODEM
+    bytes.ts       UTF-16LE and other byte helpers
+    commands.ts    builders: ready, info, screenshot, requestFile, sendFile, backup, keys, chat, time, delete;
+                   ObjType table
+    parsers.ts     info, file messages (incl. zlib), screenshot
+    session.ts     PrimeSession: serialized op queue; sendText/readText, sendApp/sendObject (+ read-back),
+                   backup, deleteObject, screenshot, pressKeys, chat, setDateTime, idle listener
+    keys.ts        key codes 0–50 + alpha letters, text→key sequences, run sequence
     log.ts         Svelte store of hex-dumped IN/OUT packets for the console
-  lib/screen.ts      screenshot decode (Prime 16-bit PNG or browser) + pixel diff for the probe
+  lib/screen.ts      screenshot decode (Prime 16-bit PNG or browser) + pixel diff for the key probe
   lib/icons.ts       bundled Material Symbols (build-time glob of the used names) + file-type → icon
+  lib/monaco.ts      Monaco bootstrap (loaded lazily): PPL Monarch tokenizer, themes, Python, providers
+  lib/monaco-features.ts  the editor contributions used (instead of register.all)
   lib/files/
-    app.ts         app (type 02) body codec + .hpappdir layout
     kinds.ts       per-path file type, editor language and text encoding (pure)
+    workspace.ts   FS Access folder (handle persisted in IndexedDB) + IndexedDB fallback; rename falls
+                   back to copy-then-delete when move() is refused
+    note.ts        note (type 05) codec: plain text + rich-text section
+    app.ts         app (type 02) body codec + .hpappdir layout, base apps, new-app starters
+    icon.ts        app icon.png (38×38, center-cropped)
+    exam.ts        exam-mode configuration (type 0B) codec: name, timeout, options, CAS, CRC-32, password copy
     backup.ts      full-backup .zip (manifest + raw objects + readable programs/notes) build/read
-    hpprgm.ts      decode (plain + 7C618AB2 container) / encode plain .hpprgm; UTF-16 helpers
-    workspace.ts   FS Access dir handle (persisted in IndexedDB, re-permission on load) + IndexedDB fallback
   lib/lang/
-    ppl.monarch.ts Monarch tokenizer: keywords (case-insensitive BEGIN/END/IF/THEN/ELSE/FOR/FROM/TO/STEP/
-                   DO/WHILE/REPEAT/UNTIL/CASE/DEFAULT/RETURN/BREAK/CONTINUE/LOCAL/EXPORT/KILL/IFERR…),
-                   ▶ and := assignment, //comments, strings, numbers incl. #hex/#bin, builtins
-    catalog.ts     command table {name, signatures[], doc, category}; names/arity seeded from
-                   hpemu crates/ppl-compiler/src/builtins.rs (MIT); docs written per HP Prime User Guide
-    symbols.ts     lightweight scanner: EXPORT/procedure defs, LOCAL/global vars, params → outline,
-                   go-to-definition, user-symbol completions
-    format.ts      formatter: block re-indent, keyword case, whitespace cleanup (strings/comments/#cas verbatim)
-    providers.ts   Monaco completion (keywords, builtins, snippets for IF/FOR/WHILE/procedure),
-                   hover, signature help, document symbols, definition, folding (BEGIN…END), formatting
-    diagnostics.ts structural lint: unbalanced BEGIN/END & block terminators, missing `;`, `=` vs `:=`,
-                   undeclared-ish identifiers (warning) → Monaco markers
+    catalog.ts     PPL command table {name, signatures[], doc, category}; names/arity from hpemu builtins.rs
+    lexer.ts       forgiving PPL lexer for the analyzer
+    symbols.ts     procedures, LOCAL/global vars, params → outline, go-to-definition, completions
+    format.ts      formatter: block re-indent, keyword case, whitespace (strings/comments/#cas verbatim)
+    diagnostics.ts structural lint → Monaco markers
+    providers.ts   Monaco PPL providers: completion, hover, signature help, symbols, definition, folding, format
+    python.ts, pythonModules.ts, pythonProviders.ts  HP Prime Python completion/hover/signatures
+                   (.py files and #PYTHON blocks)
   components/
-    Toolbar.svelte     Connect | Send | Send & Run (experimental, behind a toggle) | Screenshot
-    FileTree.svelte    workspace files; new/rename/delete; import/export .hpprgm/.txt
-    Editor.svelte      Monaco instance (vite worker import), one model per open file, tabs
-    DevicePanel.svelte device info, calculator program list (from backup), pull program into editor
-    ScreenPanel.svelte screenshot view: live mirror, save PNG, pixel format, Test keys probe, keypad toggle
-    Keypad.svelte      remote keypad (keycodes 0–50) for key injection
-    Console.svelte     status log + raw hex packet log + raw "send bytes" box (debug aid)
-    DiffView.svelte    modal Monaco diff with action buttons (driven by showDiff in state)
-    Icon.svelte        inline Material Symbols SVG (currentColor; size prop)
-    Splitter.svelte    drag handle for panel resizing
-tests/               vitest: crc16, framing, commands, parsers, hpprgm, symbols/diagnostics, session (mock transport)
+    FileList.svelte       workspace files and app folders; open/rename/delete, app actions
+    Editor.svelte         tabs + Monaco (one model per file); exam configurations open ExamEditor instead
+    ExamEditor.svelte     exam configuration form: timeout, options, password copy, features, compare, raw bits
+    CalcPanel.svelte      calculator: info, list contents, clock, apps/programs/notes/exam configs, chat,
+                          fetch by name, backup/restore
+    ScreenPanel.svelte    screenshot, live mirror, save PNG, Test keys, keypad toggle
+    Keypad.svelte         remote keypad (key codes 0–50)
+    Console.svelte        status log + hex packet log + raw send box
+    DiffView.svelte       modal Monaco diff with action buttons (showDiff in state)
+    NewFileDialog.svelte  New: program / note / app
+    NewAppDialog.svelte   new app: base app, PPL or Python, icon
+    SettingsDialog.svelte theme, pixel format, feature flags
+    Dialogs.svelte        renders the queued dialogs
+    Icon.svelte, PythonLogo.svelte, Splitter.svelte
+tests/               vitest: protocol (crc16, framing, commands, parsers), session (mock transport), app, note,
+                     exam, backup, kinds, workspace, keys, icons, PPL language (catalog, symbols, diagnostics,
+                     format, providers) and Python
 ```
 
 ## Milestones

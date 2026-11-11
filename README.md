@@ -14,15 +14,18 @@ HP Prime calculator over USB, using WebHID.
   ```
 
 ## Features
-- Monaco editor with PPL syntax highlighting.
-- Programs stored in a local folder (File System Access API) or in browser storage.
-- Send the open program to the calculator, with an overwrite check and read-back verification.
-- Notes: create, edit, send and fetch calculator notes (plain text).
-- List the programs and notes on the calculator, fetch one by name, and open it in the editor.
-- Sync the calculator's clock to your computer's.
+- Monaco editor with PPL highlighting, completion, hover, signature help, outline, lint and a formatter;
+  Python support for app modules.
+- Files stored in a local folder (File System Access API) or in browser storage, with tabs and autosave.
+- Send the open program, note or app to the calculator, with an overwrite check and read-back verification.
+- List the apps, programs and notes on the calculator, open them in the editor, or delete them.
+- Apps: edit an app's program, Info note and files (e.g. Python modules), set its icon, create new apps.
+- Exam-mode configurations (optional): edit the timeout, angle, memory and LED options, CAS, and
+  copy a password from another configuration.
+- Screen view with live mirroring, chat with the calculator, clock sync, and backup to a .zip.
 - Packet console for debugging the link.
 
-Targets the HP Prime G2; G1 support is untested. See `AGENTS.md` for protocol notes and status.
+Targets the HP Prime G2; G1 support is untested. See `AGENTS.md` for status, `docs/PROTOCOL.md` for the USB protocol and `docs/formats/` for the object formats.
 
 ## Development
 ```
