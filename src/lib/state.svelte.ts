@@ -12,7 +12,9 @@ import { runTarget } from './lang/symbols';
 import {
   appDirName,
   appDisplayName,
+  appFileOrder,
   appOfPath,
+  compareApps,
   appToFolder,
   baseAppOf,
   buildAppPayload,
@@ -863,9 +865,21 @@ export async function sendAppFolder(name: string): Promise<boolean> {
       case 'match':
         setStatus(`Sent app ${appDisplayName(name)} (${r.bytes} B) — read-back verified ✓`, 'ok');
         return true;
-      case 'mismatch':
-        setStatus(`Sent app ${appDisplayName(name)}, but the read-back differs (the calculator may have normalized it)`, 'error');
+      case 'mismatch': {
+        const diffs = r.readback ? compareApps(payload, r.readback) : ['no read-back data'];
+        if (!diffs.length) {
+          log(
+            'info',
+            `app ${name}: read-back has the same parts in a different file order ` +
+              `(sent ${appFileOrder(payload).join(', ')}; calculator ${appFileOrder(r.readback!).join(', ')})`,
+          );
+          setStatus(`Sent app ${appDisplayName(name)} (${r.bytes} B) — read-back verified ✓`, 'ok');
+          return true;
+        }
+        log('warn', `app ${name}: read-back differs in ${diffs.join('; ')}`);
+        setStatus(`Sent app ${appDisplayName(name)}, but the read-back differs: ${diffs.join('; ')}`, 'error');
         return false;
+      }
       case 'no-reply':
         setStatus(`Sent app ${appDisplayName(name)} (${r.bytes} B); the read-back got no reply`, 'error');
         return true;

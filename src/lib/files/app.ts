@@ -97,6 +97,43 @@ export function buildAppPayload(p: AppParts): Uint8Array {
   return concat(...secs.flatMap((sec) => [u32be(sec.length), sec]));
 }
 
+/**
+ * Differences between two app bodies, by part; empty when they hold the same app. Extra files are
+ * compared by name, ignoring order (the calculator may store them in a different order).
+ */
+export function compareApps(sent: Uint8Array, got: Uint8Array): string[] {
+  let a: AppParts, b: AppParts;
+  try {
+    a = parseAppPayload(sent);
+    b = parseAppPayload(got);
+  } catch (e) {
+    return [`couldn't parse: ${(e as Error).message}`];
+  }
+  const same = (x: Uint8Array, y: Uint8Array) => x.length === y.length && x.every((v, i) => v === y[i]);
+  const out: string[] = [];
+  if (!same(a.bag, b.bag)) out.push(`app data (${a.bag.length} → ${b.bag.length} B)`);
+  if (!same(a.note, b.note)) out.push(`info note (${a.note.length} → ${b.note.length} B)`);
+  if (!same(a.program, b.program)) out.push(`program (${a.program.length} → ${b.program.length} B)`);
+  const bf = new Map(b.files.map((f) => [f.name, f.data]));
+  for (const f of a.files) {
+    const g = bf.get(f.name);
+    if (!g) out.push(`${f.name} missing`);
+    else if (!same(f.data, g)) out.push(`${f.name} (${f.data.length} → ${g.length} B)`);
+    bf.delete(f.name);
+  }
+  for (const n of bf.keys()) out.push(`extra file ${n}`);
+  return out;
+}
+
+/** File order of an app body, for logging. */
+export function appFileOrder(payload: Uint8Array): string[] {
+  try {
+    return parseAppPayload(payload).files.map((f) => f.name);
+  } catch {
+    return [];
+  }
+}
+
 export function baseAppOf(bag: Uint8Array): string {
   const i = bag[20];
   return BASE_APPS[i] || `app #${i}`;

@@ -74,7 +74,9 @@ export interface SendAppResult {
   name: string;
   bytes: number;
   refused: boolean;
+  /** Byte-for-byte comparison; callers can compare `readback` more loosely (see files/app.ts). */
   verified: 'match' | 'mismatch' | 'no-reply' | 'skipped';
+  readback?: Uint8Array;
 }
 
 export interface DeleteResult {
@@ -385,7 +387,10 @@ export class PrimeSession {
       await sleep(400);
       const back = await this.requestFileUnlocked(C.ObjType.APP, name, 5000);
       if (!back) res.verified = 'no-reply';
-      else res.verified = sameIgnoringTrailingZeros(back.data, payload) ? 'match' : 'mismatch';
+      else {
+        res.readback = back.data;
+        res.verified = sameIgnoringTrailingZeros(back.data, payload) ? 'match' : 'mismatch';
+      }
       return res;
     });
   }

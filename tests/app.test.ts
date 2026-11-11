@@ -6,6 +6,7 @@ import {
   appToFolder,
   baseAppOf,
   buildAppPayload,
+  compareApps,
   decodeAppProgram,
   encodeAppText,
   folderToApp,
@@ -81,6 +82,19 @@ describe('app payload', () => {
     expect(s.program).toContain('import my_game\nmy_game.run()\n#END');
     expect(new TextDecoder().decode(s.files[0].data)).toContain('def run():');
     expect(newAppStarter('X', 'Function', 'ppl').files).toEqual([]);
+  });
+
+  it('compares apps by part, ignoring the order of extra files', () => {
+    const bag = parseAppPayload(FUNCTION).bag;
+    const f1 = { name: 'icon.png', data: Uint8Array.of(1, 2, 3) };
+    const f2 = { name: 'app.py', data: new TextEncoder().encode('x=1') };
+    const base = { bag, note: encodeAppText(''), program: encodeAppText('#PYTHON START()\n#END\n') };
+    const sent = buildAppPayload({ ...base, files: [f1, f2] });
+    expect(compareApps(sent, buildAppPayload({ ...base, files: [f2, f1] }))).toEqual([]);
+    expect(compareApps(sent, buildAppPayload({ ...base, files: [f2] }))).toEqual(['icon.png missing']);
+    expect(compareApps(sent, buildAppPayload({ ...base, program: encodeAppText('x'), files: [f1, f2] }))).toEqual([
+      expect.stringMatching(/^program/),
+    ]);
   });
 
   it('rejects data that is not an app', () => {
