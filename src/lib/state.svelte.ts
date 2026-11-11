@@ -640,7 +640,7 @@ async function importOne(f: File): Promise<boolean> {
   if (lower.endsWith('.py')) return importPython(f.name, bytes);
   if (lower.endsWith('.hpexammode')) {
     if (!ui.examMode) {
-      setStatus('Turn on Settings → Exam mode configurations to import exam configurations', 'error');
+      setStatus('Turn on Settings → Experimental → Exam mode configurations to import exam configurations', 'error');
       return false;
     }
     const name = await validNameFor(f.name, stem(f.name), 'exam configuration', isValidExamName, '1–31 characters, no / \\ : * ? " < > |');

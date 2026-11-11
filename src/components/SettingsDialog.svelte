@@ -18,11 +18,6 @@
       items: [
         { flag: 'listOnConnect', label: 'List contents on connect', hint: 'Read apps, programs and notes when the calculator connects (~20 s).' },
         { flag: 'chat', label: 'Chat', hint: 'Send messages to the calculator and see its replies and Help requests.' },
-        {
-          flag: 'examMode',
-          label: 'Exam mode configurations',
-          hint: 'List, open, edit and send exam-mode configurations (.hpexammode). Their format is only partly known, and sending them is untested on hardware.',
-        },
       ],
     },
     {
@@ -38,6 +33,11 @@
           flag: 'remoteKeys',
           label: 'Remote keys',
           hint: 'Keypad, Test keys and typing on the screen. On the G2, injected keys are often queued until a real key is pressed.',
+        },
+        {
+          flag: 'examMode',
+          label: 'Exam mode configurations',
+          hint: 'List, open, edit and send exam-mode configurations (.hpexammode). Most options are decoded; passwords can only be copied from another configuration, and sending is untested on hardware.',
         },
         {
           flag: 'hpprgm',
