@@ -1,6 +1,6 @@
 /** Monaco language providers for PPL: completion, hover, signature help, outline, definitions and folding. */
 import type * as Monaco from 'monaco-editor/editor';
-import { KEYWORDS } from './lexer';
+import { KEYWORDS, KEYWORD_SET } from './lexer';
 import {
   COMMANDS,
   CATEGORY_LABELS,
@@ -9,6 +9,7 @@ import {
   lookupCommandAnyCase,
   type Command,
 } from './catalog';
+import { helpCommands, helpFor, helpForKeyword, helpMarkdown, syntaxArity, syntaxLines, syntaxParams, type HelpTopic } from './firmwareHelp';
 import { analyze, findSymbol, visibleAt, type Analysis, type Sym } from './symbols';
 import { formatPpl } from './format';
 import { pyCompletionItems, pyHover, pySignatureHelp, pythonRegion } from './pythonProviders';
@@ -150,6 +151,23 @@ export function parseSignature(sig: string): { params: string[] } {
 }
 
 /** Picks the signature best matching the number of arguments typed so far. */
+function firmwareSignatureHelp(t: HelpTopic, sigs: string[], argIndex: number): Monaco.languages.SignatureHelpResult {
+  const doc = t.subtitle ? `**${t.title}** — ${t.subtitle}` : `**${t.title}**`;
+  const fits = sigs.findIndex((s) => (syntaxArity(s)?.max ?? 0) > argIndex);
+  return {
+    value: {
+      signatures: sigs.map((label) => ({
+        label,
+        documentation: { value: doc + '\n\n*From the calculator\'s help.*' },
+        parameters: syntaxParams(label).map((r) => ({ label: r })),
+      })),
+      activeSignature: fits >= 0 ? fits : sigs.length - 1,
+      activeParameter: argIndex,
+    },
+    dispose() {},
+  };
+}
+
 function bestSignature(cmd: Command, argIndex: number): number {
   const counts = cmd.signatures.map((s) => parseSignature(s).params.length);
   const exact = counts.findIndex((n) => n > argIndex);
@@ -203,13 +221,29 @@ export function registerPplProviders(monaco: typeof Monaco, languageId: string):
         });
       }
       for (const cmd of COMMANDS) {
+        const fw = helpFor(cmd.name);
         suggestions.push({
           label: cmd.name,
           kind: K.Function,
-          detail: cmd.signatures[0],
-          documentation: { value: commandMarkdown(cmd) },
+          detail: (fw && syntaxLines(fw)[0]) || cmd.signatures[0],
+          documentation: { value: fw ? helpMarkdown(fw, languageId) : commandMarkdown(cmd) },
           insertText: cmd.maxArgs === 0 ? cmd.name : cmd.name + '(',
           sortText: '1' + cmd.name,
+          range,
+        });
+      }
+      // Commands documented only in the calculator's own help (when a firmware file is loaded).
+      for (const t of helpCommands()) {
+        if (lookupCommand(t.title) || KEYWORD_SET.has(t.title)) continue;
+        const sig = syntaxLines(t)[0] ?? t.title;
+        suggestions.push({
+          label: t.title,
+          kind: K.Function,
+          detail: sig,
+          documentation: { value: helpMarkdown(t, languageId) },
+          insertText: sig.includes('(') ? t.title + '(' : t.title,
+          // Lower-case names are CAS commands: after the PPL ones.
+          sortText: (/^[a-z]/.test(t.title) ? '15' : '1') + t.title,
           range,
         });
       }
@@ -248,6 +282,9 @@ export function registerPplProviders(monaco: typeof Monaco, languageId: string):
       const range = new monaco.Range(position.lineNumber, w.start, position.lineNumber, w.end);
       const user = findSymbol(analysisFor(model), w.text, position.lineNumber);
       if (user) return { range, contents: [{ value: symMarkdown(user) }] };
+      // The calculator's own help when loaded: exact name (lower case = the CAS command), or a keyword.
+      const fw = helpFor(w.text) ?? (KEYWORD_SET.has(w.text.toUpperCase()) ? helpForKeyword(w.text) : undefined);
+      if (fw) return { range, contents: [{ value: helpMarkdown(fw, languageId) }] };
       const cmd = lookupCommandAnyCase(w.text);
       if (!cmd) return null;
       const contents = [{ value: commandMarkdown(cmd) }];
@@ -292,6 +329,11 @@ export function registerPplProviders(monaco: typeof Monaco, languageId: string):
           },
           dispose() {},
         };
+      }
+      const fw = helpFor(call.name);
+      if (fw) {
+        const sigs = syntaxLines(fw).filter((l) => l.startsWith(fw.title + '('));
+        if (sigs.length) return firmwareSignatureHelp(fw, sigs, call.argIndex);
       }
       const cmd = lookupCommandAnyCase(call.name);
       if (!cmd) return null;

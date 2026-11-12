@@ -16,6 +16,8 @@ HP Prime calculator over USB, using WebHID.
 ## Features
 - Monaco editor with PPL highlighting, completion, hover, signature help, outline, lint and a formatter;
   Python support for app modules.
+- Load the calculator's own help from your firmware file (the `.zip` from HP or hpcalc.org) for hover,
+  completion and signature help; it stays in your browser.
 - Import files into the workspace: programs, Python modules (into an app), app files and exam
   configurations; `.hpprgm` import/export is experimental.
 - Files stored in a local folder (File System Access API) or in browser storage, with tabs and autosave.

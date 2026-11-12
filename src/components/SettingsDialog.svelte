@@ -4,6 +4,7 @@
   import type { IconName } from '../lib/icons';
   import type { PixelMode } from '../lib/screen';
   import { screen, setPixelMode } from '../lib/state.svelte';
+  import { clearHelp, help, languageName, loadHelpFile, setHelpLanguage } from '../lib/helpStore.svelte';
   import { resolvedTheme, setFlag, setTheme, ui, type Flag, type ThemePref } from '../lib/ui.svelte';
 
   const THEMES: { value: ThemePref; label: string; icon: IconName }[] = [
@@ -54,6 +55,7 @@
   ];
 
   let dialog: HTMLDialogElement;
+  let helpInput: HTMLInputElement;
   onMount(() => dialog.showModal());
   const close = () => (ui.settingsOpen = false);
 </script>
@@ -92,6 +94,54 @@
         <option value="gray">Gray</option>
       </select>
       <p class="hint muted">How screenshots read the calculator's 16-bit pixels. Change it if colors look wrong.</p>
+    </section>
+
+    <section>
+      <h3><Icon name="menu_book" size={16} /> Calculator help</h3>
+      {#if help.loaded}
+        <p class="status">
+          {help.loaded.commands} commands from <span class="mono">{help.loaded.source}</span>{#if help.loaded.date}
+            ({help.loaded.date}){/if}
+        </p>
+        {#if help.loaded.languages.length > 1}
+          <select
+            aria-label="Help language"
+            value={help.loaded.lang}
+            disabled={help.busy}
+            onchange={(e) => setHelpLanguage(Number(e.currentTarget.value))}
+          >
+            {#each help.loaded.languages.toSorted((a, b) => a - b) as l (l)}
+              <option value={l}>{languageName(l)}</option>
+            {/each}
+          </select>
+        {/if}
+      {/if}
+      <p class="hint muted">
+        Show the calculator's own help in hover, completion and signature help, read from an HP Prime firmware
+        file (the firmware <span class="mono">.zip</span> or <span class="mono">HPPrime_OS.img</span>). The file is read
+        here and kept only in this browser.
+      </p>
+      <div class="row">
+        <button type="button" disabled={help.busy} onclick={() => helpInput.click()}>
+          <Icon name="upload_file" size={16} />
+          {help.busy ? 'Reading…' : help.loaded ? 'Replace…' : 'Load firmware…'}
+        </button>
+        {#if help.loaded}
+          <button type="button" disabled={help.busy} onclick={() => clearHelp()}><Icon name="delete" size={16} /> Remove</button>
+        {/if}
+      </div>
+      {#if help.error}<p class="hint error">{help.error}</p>{/if}
+      <input
+        bind:this={helpInput}
+        type="file"
+        accept=".zip,.img"
+        hidden
+        onchange={(e) => {
+          const f = e.currentTarget.files?.[0];
+          e.currentTarget.value = '';
+          if (f) void loadHelpFile(f);
+        }}
+      />
     </section>
 
     {#each GROUPS as g (g.title)}
@@ -219,6 +269,30 @@
   }
   .check .hint {
     margin-top: 2px;
+  }
+  .status {
+    margin: 0 0 6px;
+    font-size: 13px;
+  }
+  .status + select {
+    margin-bottom: 2px;
+  }
+  .mono {
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .row {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+  }
+  .row button {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .error {
+    color: var(--err);
   }
   footer {
     display: flex;

@@ -8,6 +8,7 @@ import type * as Monaco from 'monaco-editor/editor';
 import { lex, type Token } from './lexer';
 import { acceptsArgCount, arityText, lookupCommand, lookupCommandAnyCase } from './catalog';
 import { analyze, findSymbol, procedureAt } from './symbols';
+import { firmwareAccepts, onHelpChange } from './firmwareHelp';
 
 export type Severity = 'error' | 'warning' | 'info';
 
@@ -197,7 +198,7 @@ export function lint(src: string): Diagnostic[] {
         }
         if (closed) {
           const n = sawArg || count > 0 ? count + 1 : 0;
-          if (!acceptsArgCount(cmd, n)) {
+          if (!acceptsArgCount(cmd, n) && !firmwareAccepts(cmd.name, n)) {
             const plural = cmd.minArgs === cmd.maxArgs && cmd.minArgs === 1 ? '' : 's';
             out.push(diag(t, 'error', 'arg-count', `${cmd.name} takes ${arityText(cmd)} argument${plural}, but ${n} ${n === 1 ? 'was' : 'were'} given`));
           }
@@ -280,4 +281,6 @@ export function registerDiagnostics(monaco: typeof Monaco, languageId: string): 
 
   monaco.editor.onDidCreateModel(attach);
   monaco.editor.getModels().forEach(attach);
+  // Argument counts can change when the calculator's help is loaded or removed.
+  onHelpChange(() => monaco.editor.getModels().forEach((m) => m.getLanguageId() === languageId && run(m)));
 }

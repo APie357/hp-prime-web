@@ -16,6 +16,7 @@
   import { fileType } from './lib/files/kinds';
   import { resetSize, saveLayout, setSize, ui, type Layout } from './lib/ui.svelte';
   import SettingsDialog from './components/SettingsDialog.svelte';
+  import { initHelp } from './lib/helpStore.svelte';
   import { app, autoConnect, connect, disconnect, initWorkspace, sendAndRun, sendCurrent, toggleConsole } from './lib/state.svelte';
   import { programNameFromFile } from './lib/files/workspace';
 
@@ -52,6 +53,7 @@
 
   onMount(() => {
     initWorkspace();
+    void initHelp();
     void autoConnect();
   });
 

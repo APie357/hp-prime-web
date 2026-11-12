@@ -9,6 +9,7 @@ import { COMMANDS } from './lang/catalog';
 import { registerPplProviders } from './lang/providers';
 import { registerPythonProviders } from './lang/pythonProviders';
 import { registerDiagnostics } from './lang/diagnostics';
+import { helpCommands, onHelpChange } from './lang/firmwareHelp';
 
 self.MonacoEnvironment = {
   getWorker: () => new EditorWorker(),
@@ -46,37 +47,48 @@ monaco.languages.setLanguageConfiguration(PPL, {
 // Keywords are case-insensitive on the calculator; built-in commands are not (lower case calls the
 // CAS version), so the tokenizer is case-sensitive and lists the common keyword spellings.
 const keywordSpellings = KEYWORDS.flatMap((k) => [k, k.toLowerCase(), k[0] + k.slice(1).toLowerCase()]);
-const builtins = COMMANDS.flatMap((c) => [c.name, ...(c.aliases ?? [])]);
+const catalogBuiltins = COMMANDS.flatMap((c) => [c.name, ...(c.aliases ?? [])]);
 
-monaco.languages.setMonarchTokensProvider(PPL, {
-  ignoreCase: false,
-  keywords: keywordSpellings,
-  builtins,
-  tokenizer: {
-    root: [
-      [/\/\/.*$/, 'comment'],
-      // #PYTHON name() … #END: highlight the block as Python.
-      [/#[Pp][Yy][Tt][Hh][Oo][Nn]\b.*$/, { token: 'keyword.directive', next: '@python', nextEmbedded: 'python' }],
-      [/#([Pp][Rr][Aa][Gg][Mm][Aa]|[Cc][Aa][Ss]|[Ee][Nn][Dd]).*$/, 'keyword.directive'],
-      [/"/, 'string', '@string'],
-      [/#[0-9A-Fa-f]+[hbodHBOD]?(:\d+)?/, 'number.hex'],
-      [/\d*\.?\d+([Eeᴇ][-+]?\d+)?/, 'number'],
-      [/[A-Za-z_\u0370-\u03FF][\w\u0370-\u03FF]*/, { cases: { '@keywords': 'keyword', '@builtins': 'predefined', '@default': 'identifier' } }],
-      [/:=|▶|→/, 'operator.assign'],
-      [/[<>]=?|==|≠|≤|≥|<>|[-+*/^=]/, 'operator'],
-      [/[()[\]{}]/, '@brackets'],
-      [/[;,]/, 'delimiter'],
-    ],
-    python: [
-      [/^\s*#[Ee][Nn][Dd]\b.*$/, { token: 'keyword.directive', next: '@pop', nextEmbedded: '@pop' }],
-    ],
-    string: [
-      [/[^"\\]+/, 'string'],
-      [/\\./, 'string.escape'],
-      [/"/, 'string', '@pop'],
-    ],
-  },
-});
+/** (Re)registers the PPL tokenizer. Commands from the calculator's help count as built-ins too,
+ *  except lower-case (CAS) names, matching how catalog commands are highlighted. */
+function setPplTokens(): void {
+  const fromHelp = helpCommands()
+    .map((t) => t.title)
+    .filter((n) => !/^[a-z]/.test(n));
+  const builtins = [...new Set([...catalogBuiltins, ...fromHelp])];
+  monaco.languages.setMonarchTokensProvider(PPL, {
+    ignoreCase: false,
+    keywords: keywordSpellings,
+    builtins,
+    tokenizer: {
+      root: [
+        [/\/\/.*$/, 'comment'],
+        // #PYTHON name() … #END: highlight the block as Python.
+        [/#[Pp][Yy][Tt][Hh][Oo][Nn]\b.*$/, { token: 'keyword.directive', next: '@python', nextEmbedded: 'python' }],
+        [/#([Pp][Rr][Aa][Gg][Mm][Aa]|[Cc][Aa][Ss]|[Ee][Nn][Dd]).*$/, 'keyword.directive'],
+        [/"/, 'string', '@string'],
+        [/#[0-9A-Fa-f]+[hbodHBOD]?(:\d+)?/, 'number.hex'],
+        [/\d*\.?\d+([Eeᴇ][-+]?\d+)?/, 'number'],
+        [/[A-Za-z_\u0370-\u03FF][\w\u0370-\u03FF]*/, { cases: { '@keywords': 'keyword', '@builtins': 'predefined', '@default': 'identifier' } }],
+        [/:=|▶|→/, 'operator.assign'],
+        [/[<>]=?|==|≠|≤|≥|<>|[-+*/^=]/, 'operator'],
+        [/[()[\]{}]/, '@brackets'],
+        [/[;,]/, 'delimiter'],
+      ],
+      python: [
+        [/^\s*#[Ee][Nn][Dd]\b.*$/, { token: 'keyword.directive', next: '@pop', nextEmbedded: '@pop' }],
+      ],
+      string: [
+        [/[^"\\]+/, 'string'],
+        [/\\./, 'string.escape'],
+        [/"/, 'string', '@pop'],
+      ],
+    },
+  });
+}
+
+setPplTokens();
+onHelpChange(setPplTokens);
 
 registerPplProviders(monaco, PPL);
 registerPythonProviders(monaco);
